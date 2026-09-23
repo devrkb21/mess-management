@@ -54,7 +54,7 @@ services:
     environment:
       APP_NAME: Mess Management
       APP_ENV: local
-      APP_DEBUG: ${APP_DEBUG:-true}
+      APP_DEBUG: ${APP_DEBUG:-false}
       APP_KEY: ${APP_KEY:-base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
       APP_URL: http://localhost:${BACKEND_PORT:-8000}
       DB_CONNECTION: pgsql

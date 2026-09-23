@@ -1,0 +1,17 @@
+# Workspace and operating-system files
+.gemini/user-*.json
+.DS_Store
+Thumbs.db
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Shared JavaScript tooling output
+node_modules/
+.pnpm-store/
+
+# Editor metadata
+.idea/
+.vscode/

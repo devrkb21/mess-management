@@ -1,5 +1,7 @@
 # Mess Management Platform
 
+![CI](https://github.com/devrkb21/mess-management/actions/workflows/ci.yml/badge.svg)
+
 A full-stack platform for Bangladesh's shared housing ("mess") ecosystem — digitizing daily meal tracking, expense management, and bill generation for shared living arrangements.
 
 ## Architecture
@@ -57,8 +59,28 @@ php artisan serve
 
 ### With Docker (PostgreSQL + Redis)
 ```bash
-docker compose up -d
+cp .env.example .env
+docker compose up -d --build
 ```
+
+The web app is available at `http://localhost:3000` and the Laravel API at
+`http://localhost:8000`. Add `--profile tools` to the command to start pgAdmin
+at `http://localhost:5050`.
+
+To stop the stack and remove its local data volumes:
+
+```bash
+docker compose down --volumes
+```
+
+## Branches
+
+- `dev` is the active development branch.
+- `pub` is the stable branch and the repository default.
+
+Every push and pull request targeting either branch runs backend tests, web
+and mobile validation, and a full Docker Compose smoke test through GitHub
+Actions.
 
 ## Documentation
 

@@ -110,15 +110,15 @@ jobs:
         run: docker compose build backend web
 
       - name: Start the full stack
-        run: docker compose up -d
+        run: docker compose up -d --wait
 
       - name: Show service status
         run: docker compose ps
 
       - name: Smoke test API and web
         run: |
-          curl --fail --retry 10 --retry-delay 3 http://localhost:8080
-          curl --fail --retry 10 --retry-delay 3 --header 'Accept: application/json' http://localhost:8001/up
+          curl --fail --retry 5 --retry-all-errors --retry-delay 3 http://localhost:8080
+          curl --fail --retry 5 --retry-all-errors --retry-delay 3 --header 'Accept: application/json' http://localhost:8001/up
           docker compose exec -T backend php artisan about --only=environment
 
       - name: Show service logs on failure

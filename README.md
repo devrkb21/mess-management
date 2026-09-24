@@ -63,9 +63,11 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-The web app is available at `http://localhost:3000` and the Laravel API at
-`http://localhost:8000`. Add `--profile tools` to the command to start pgAdmin
-at `http://localhost:5050`.
+The web app is available at `http://localhost:8080` and the Laravel API at
+`http://localhost:8001` by default. Set `WEB_PORT` and `BACKEND_PORT` in `.env`
+to choose different host ports. For a server, set `NEXT_PUBLIC_API_URL` to the
+public API URL or domain before building the web image. Add `--profile tools`
+to start pgAdmin at `http://localhost:5050`.
 
 To stop the stack and remove its local data volumes:
 

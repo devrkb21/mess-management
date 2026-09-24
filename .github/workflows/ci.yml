@@ -117,8 +117,9 @@ jobs:
 
       - name: Smoke test API and web
         run: |
-          curl --fail --retry 10 --retry-delay 3 --header 'Accept: application/json' http://localhost:8000/up
-          curl --fail --retry 10 --retry-delay 3 http://localhost:3000
+          curl --fail --retry 10 --retry-delay 3 http://localhost:8080
+          curl --fail --retry 10 --retry-delay 3 --header 'Accept: application/json' http://localhost:8001/up
+          docker compose exec -T backend php artisan about --only=environment
 
       - name: Show service logs on failure
         if: failure()

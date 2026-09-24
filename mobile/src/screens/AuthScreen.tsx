@@ -9,11 +9,10 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
-import { api, getBaseUrl, setBaseUrl } from "../lib/api";
+import { api } from "../lib/api";
 
 export function AuthScreen() {
   const { login } = useAuth();
@@ -27,14 +26,6 @@ export function AuthScreen() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Server URL configuration
-  const [showConfig, setShowConfig] = useState(false);
-  const [serverUrl, setServerUrl] = useState("");
-
-  React.useEffect(() => {
-    getBaseUrl().then(setServerUrl);
-  }, []);
 
   const handleAuth = async () => {
     setError(null);
@@ -66,13 +57,6 @@ export function AuthScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSaveUrl = async () => {
-    if (!serverUrl.trim()) return;
-    await setBaseUrl(serverUrl.trim());
-    Alert.alert("Updated", `API Base URL set to:\n${serverUrl.trim()}`);
-    setShowConfig(false);
   };
 
   const fillDemo = (demoEmail: string) => {
@@ -221,30 +205,6 @@ export function AuthScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Server Config Toggle */}
-        <TouchableOpacity
-          style={styles.configToggle}
-          onPress={() => setShowConfig(!showConfig)}
-        >
-          <Ionicons name="settings-outline" size={14} color="#6b7280" />
-          <Text style={styles.configToggleText}>API Server Settings</Text>
-        </TouchableOpacity>
-
-        {showConfig && (
-          <View style={styles.configBox}>
-            <Text style={styles.configLabel}>Backend API Base URL:</Text>
-            <TextInput
-              style={styles.configInput}
-              value={serverUrl}
-              onChangeText={setServerUrl}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <TouchableOpacity style={styles.configSaveButton} onPress={handleSaveUrl}>
-              <Text style={styles.configSaveText}>Save URL</Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -416,49 +376,5 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 15,
     fontWeight: "700",
-  },
-  configToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    marginTop: 24,
-  },
-  configToggleText: {
-    fontSize: 12,
-    color: "#6b7280",
-  },
-  configBox: {
-    marginTop: 12,
-    padding: 16,
-    backgroundColor: "#f3f4f6",
-    borderRadius: 16,
-  },
-  configLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#4b5563",
-    marginBottom: 6,
-  },
-  configInput: {
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    padding: 8,
-    fontSize: 13,
-    color: "#111827",
-    marginBottom: 8,
-  },
-  configSaveButton: {
-    backgroundColor: "#374151",
-    borderRadius: 8,
-    paddingVertical: 8,
-    alignItems: "center",
-  },
-  configSaveText: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "600",
   },
 });

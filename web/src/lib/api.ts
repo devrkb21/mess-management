@@ -1,11 +1,5 @@
 function getApiBase(): string {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
-  if (typeof window !== "undefined" && window.location?.hostname) {
-    return `http://${window.location.hostname}:8000/api/v1`;
-  }
-  return "http://localhost:8000/api/v1";
+  return "https://mess.czbd.dev/api/v1";
 }
 
 export class ApiError extends Error {

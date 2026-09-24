@@ -64,6 +64,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Configure API endpoint
+        run: cp .env.example .env
+
       - name: Typecheck
         run: npm run typecheck
 
@@ -90,6 +93,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Configure API endpoint
+        run: cp .env.example .env
+
       - name: Typecheck
         run: npm run typecheck
 
@@ -102,6 +108,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Configure Compose environment
+        run: cp .env.example .env
 
       - name: Validate Compose configuration
         run: docker compose --profile tools config --quiet

@@ -1,5 +1,11 @@
 function getApiBase(): string {
-  return "https://mess.czbd.dev/api/v1";
+  const apiBase = process.env.NEXT_PUBLIC_API_URL;
+
+  if (!apiBase) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured");
+  }
+
+  return apiBase;
 }
 
 export class ApiError extends Error {

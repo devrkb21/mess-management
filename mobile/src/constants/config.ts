@@ -1,4 +1,10 @@
-export const DEFAULT_API_URL = "https://mess.czbd.dev/api/v1";
+const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+if (!apiUrl) {
+  throw new Error("EXPO_PUBLIC_API_URL is not configured");
+}
+
+export const DEFAULT_API_URL = apiUrl;
 
 export const STORAGE_KEYS = {
   AUTH_TOKEN: "mess_mobile_token",

@@ -51,8 +51,8 @@ A full-stack platform for Bangladesh's shared housing ("mess") ecosystem — dig
 
 ### Backend Setup
 ```bash
-cd backend
 cp .env.example .env
+cd backend
 composer install
 php artisan key:generate
 php artisan migrate
@@ -71,6 +71,10 @@ to choose different host ports. The clients use `https://mess.czbd.dev/api/v1`
 as their fixed API endpoint. Add `--profile tools`
 to start pgAdmin at `http://127.0.0.1:5050`. PostgreSQL and Redis are private
 Compose services and do not consume host ports.
+
+The same root `.env` is used by Compose, Next.js, and Expo. For mobile local
+development, run `npm run start` from `mobile/`; Expo loads `../.env` through
+the project app config.
 
 To stop the stack and remove its local data volumes:
 

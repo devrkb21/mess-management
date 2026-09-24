@@ -1,3 +1,5 @@
+Set `NEXT_PUBLIC_API_URL` and `EXPO_PUBLIC_API_URL` in the app environment
+files to the API endpoint. Add `--profile tools`
 # Mess Management Platform
 
 ![CI](https://github.com/devrkb21/mess-management/actions/workflows/ci.yml/badge.svg)

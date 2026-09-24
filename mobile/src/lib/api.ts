@@ -4,8 +4,9 @@ import { DEFAULT_API_URL, STORAGE_KEYS } from "../constants/config";
 let cachedApiUrl: string | null = null;
 
 export async function getBaseUrl(): Promise<string> {
-  cachedApiUrl ??= DEFAULT_API_URL;
-  return cachedApiUrl;
+  const baseUrl = cachedApiUrl ?? DEFAULT_API_URL;
+  cachedApiUrl = baseUrl;
+  return baseUrl;
 }
 
 async function apiRequest<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {

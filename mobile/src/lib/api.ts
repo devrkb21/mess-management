@@ -4,15 +4,8 @@ import { DEFAULT_API_URL, STORAGE_KEYS } from "../constants/config";
 let cachedApiUrl: string | null = null;
 
 export async function getBaseUrl(): Promise<string> {
-  if (cachedApiUrl) return cachedApiUrl;
-  const custom = await AsyncStorage.getItem(STORAGE_KEYS.CUSTOM_API_URL);
-  cachedApiUrl = custom || DEFAULT_API_URL;
+  cachedApiUrl ??= DEFAULT_API_URL;
   return cachedApiUrl;
-}
-
-export async function setBaseUrl(url: string) {
-  cachedApiUrl = url;
-  await AsyncStorage.setItem(STORAGE_KEYS.CUSTOM_API_URL, url);
 }
 
 async function apiRequest<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {

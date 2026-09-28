@@ -13,9 +13,13 @@ async function apiRequest<T = any>(endpoint: string, options: RequestInit = {}):
   const baseUrl = await getBaseUrl();
   const token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
 
+  // When the body is FormData (file uploads), let React Native generate the
+  // multipart Content-Type with its own boundary — an explicit header breaks it.
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+
   const headers: Record<string, string> = {
     Accept: "application/json",
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(options.headers as Record<string, string>),
   };
 
@@ -213,6 +217,28 @@ export const api = {
   createListing: (messId: string, payload: any) =>
     apiRequest(`/messes/${messId}/listings`, { method: "POST", body: JSON.stringify(payload) }),
   getMessListings: (messId: string) => apiRequest(`/messes/${messId}/listings`),
+  uploadListingPhotos: (messId: string, files: any[], listingId?: string) => {
+    const formData = new FormData();
+    if (listingId) formData.append("listing_id", listingId);
+    files.forEach((file: any, idx: number) => {
+      formData.append("photos[]", {
+        uri: file.uri,
+        name: file.fileName || `photo-${idx}.jpg`,
+        type: file.mimeType || "image/jpeg",
+      } as any);
+    });
+    return apiRequest(`/messes/${messId}/listings/photos`, { method: "POST", body: formData });
+  },
+  uploadListingVideo: (messId: string, listingId: string, file: any) => {
+    const formData = new FormData();
+    formData.append("listing_id", listingId);
+    formData.append("video", {
+      uri: file.uri,
+      name: file.fileName || "walkthrough.mp4",
+      type: file.mimeType || "video/mp4",
+    } as any);
+    return apiRequest(`/messes/${messId}/listings/video`, { method: "POST", body: formData });
+  },
 
   // Applications & Waiting List (#29, #33, #34, #35)
   applyListing: (id: string, payload: any) =>

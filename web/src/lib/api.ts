@@ -172,6 +172,16 @@ export const api = {
       headers: { "Content-Type": undefined } as any,
     });
   },
+  uploadListingPhotos: (messId: string, files: File[], listingId?: string) => {
+    const formData = new FormData();
+    if (listingId) formData.append("listing_id", listingId);
+    files.forEach((file) => formData.append("photos[]", file));
+    return apiRequest(`/messes/${messId}/listings/photos`, {
+      method: "POST",
+      body: formData,
+      headers: { "Content-Type": undefined } as any,
+    });
+  },
   getVacancyAnalytics: (messId: string) => apiRequest(`/messes/${messId}/analytics/vacancy`),
   toggleFavoriteListing: (id: string) => apiRequest(`/marketplace/listings/${id}/favorite`, { method: "POST" }),
   getFavoriteListings: () => apiRequest("/marketplace/favorites"),

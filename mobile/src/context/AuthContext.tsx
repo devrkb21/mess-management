@@ -81,12 +81,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (newToken: string, newUser: User) => {
     setToken(newToken);
-    setUser(newUser);
     await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, newToken);
-    await AsyncStorage.setItem(STORAGE_KEYS.AUTH_USER, JSON.stringify(newUser));
 
-    if (newUser.residencies && newUser.residencies.length > 0) {
-      const messId = newUser.residencies[0].mess_id;
+    // Some login/register responses arrive without residencies (older API
+    // payloads). Hydrate from /me so the dashboard has a mess immediately —
+    // otherwise every screen shows empty content until a full app restart.
+    let userToUse = newUser;
+    if (!newUser.residencies?.length) {
+      try {
+        const res = await api.getMe();
+        if (res?.user?.residencies?.length) userToUse = res.user;
+      } catch {
+        // keep original payload; screens will still render a signed-out-mess state
+      }
+    }
+
+    setUser(userToUse);
+    await AsyncStorage.setItem(STORAGE_KEYS.AUTH_USER, JSON.stringify(userToUse));
+
+    if (userToUse.residencies && userToUse.residencies.length > 0) {
+      const messId = userToUse.residencies[0].mess_id;
       setCurrentMessIdState(messId);
       await AsyncStorage.setItem(STORAGE_KEYS.CURRENT_MESS_ID, messId);
     }

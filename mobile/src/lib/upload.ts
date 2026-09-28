@@ -3,17 +3,16 @@
  *
  * React Native's bundled FormData rejects the classic { uri, name, type }
  * file descriptor on newer runtimes ("Unsupported FormDataPart
- * implementation"), so on native we build the multipart body ourselves from
- * real file bytes read with expo-file-system and send it with expo/fetch.
- * On web, the standard browser FormData handles File/Blob objects natively.
+ * implementation"), so on native we use expo-file-system's legacy
+ * uploadAsync (Expo's own native multipart implementation — it does not
+ * touch the JS FormData at all). One request is sent per file and the
+ * backend appends each upload to the listing. On web, the standard browser
+ * FormData handles File/Blob objects natively.
  */
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { File } from "expo-file-system";
-import { fetch as expoFetch } from "expo/fetch";
+import * as FileSystem from "expo-file-system/legacy";
 import { DEFAULT_API_URL, STORAGE_KEYS } from "../constants/config";
-
-const BOUNDARY = "messbari-form-boundary-7f3a9c";
 
 export interface UploadFile {
   uri: string;
@@ -33,24 +32,33 @@ function guessFileName(file: UploadFile, fallbackExt: string): string {
   return lastSegment || `upload-${Date.now()}.${fallbackExt}`;
 }
 
-function toUint8Array(text: string): Uint8Array<ArrayBuffer> {
-  return new TextEncoder().encode(text) as Uint8Array<ArrayBuffer>;
-}
-
-function concatBytes(chunks: Uint8Array<ArrayBufferLike>[]): Uint8Array<ArrayBuffer> {
-  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, offset);
-    offset += chunk.length;
+/** POST a JSON request (used for batched server-side appends on native). */
+async function postJson(endpoint: string, payload: any): Promise<any> {
+  const token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+  const res = await fetch(`${DEFAULT_API_URL}${endpoint}`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(
+      data?.message ||
+        (data?.errors ? Object.values(data.errors).flat().join(", ") : null) ||
+        `Request failed (${res.status})`
+    );
   }
-  return out;
+  return data;
 }
 
 /**
- * POST a multipart/form-data request. `fileField` entries are read from disk
- * on native (real bytes, no FormData) and appended as-is on web.
+ * POST a multipart/form-data upload. `files` are sent as the given
+ * `fileField` (multiple photos are sent one request per photo on native —
+ * the backend appends them in order); `fields` ride along as form params.
  */
 export async function uploadMultipart(
   endpoint: string,
@@ -65,23 +73,20 @@ export async function uploadMultipart(
   const authHeaders: Record<string, string> = token
     ? { Authorization: `Bearer ${token}` }
     : {};
-
   const fallbackExt = options.fallbackExtension || "jpg";
 
   if (Platform.OS === "web") {
-    const baseUrl = DEFAULT_API_URL;
     const form = new FormData();
     (options.fields || []).forEach((f) => form.append(f.fieldName, f.value));
-    options.files.forEach((file, idx) => {
+    options.files.forEach((file) => {
       const name = guessFileName(file, fallbackExt);
       form.append(
         options.fileField + (options.files.length > 1 ? "[]" : ""),
         { uri: file.uri, name } as unknown as Blob,
         name
       );
-      void idx;
     });
-    const res = await fetch(`${baseUrl}${endpoint}`, {
+    const res = await fetch(`${DEFAULT_API_URL}${endpoint}`, {
       method: "POST",
       headers: authHeaders,
       body: form,
@@ -93,54 +98,65 @@ export async function uploadMultipart(
     return data;
   }
 
-  // Native: build the multipart body from real file bytes.
-  const chunks: Uint8Array[] = [];
-
-  for (const field of options.fields || []) {
-    chunks.push(
-      toUint8Array(
-        `--${BOUNDARY}\r\nContent-Disposition: form-data; name="${field.fieldName}"\r\n\r\n${field.value}\r\n`
-      )
-    );
-  }
-
-  for (const file of options.files) {
+  // Native: legacy uploadAsync per file with Expo's native multipart.
+  const responses: any[] = [];
+  for (let index = 0; index < options.files.length; index++) {
+    const file = options.files[index];
     const name = guessFileName(file, fallbackExt);
-    const mimeType = file.mimeType || "application/octet-stream";
-    const fileBytes = await new File(file.uri).bytes();
 
-    chunks.push(
-      toUint8Array(
-        `--${BOUNDARY}\r\nContent-Disposition: form-data; name="${options.fileField}${
-          options.files.length > 1 ? "[]" : ""
-        }"; filename="${name}"\r\nContent-Type: ${mimeType}\r\n\r\n`
-      )
+    // uploadAsync POSTs a single file as `fieldName`; PHP reads it as a
+    // single-element array so it satisfies the same `photos.*` rules.
+    const params: Record<string, string> = {};
+    (options.fields || []).forEach((f) => {
+      params[f.fieldName] = f.value;
+    });
+
+    const res = await FileSystem.uploadAsync(
+      `${DEFAULT_API_URL}${endpoint}`,
+      file.uri,
+      {
+        httpMethod: "POST",
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: index === 0 ? `${options.fileField}[]` : options.fileField,
+        mimeType: file.mimeType || "application/octet-stream",
+        parameters: params,
+        headers: authHeaders,
+      }
     );
-    chunks.push(fileBytes);
-    chunks.push(toUint8Array("\r\n"));
+
+    let body: any = null;
+    try {
+      body = JSON.parse(res.body);
+    } catch {
+      body = null;
+    }
+
+    if (res.status >= 400) {
+      const msg =
+        body?.message ||
+        (body?.errors ? Object.values(body.errors).flat().join(", ") : null) ||
+        `Upload failed (${res.status})`;
+      throw new Error(msg);
+    }
+    responses.push(body);
   }
 
-  chunks.push(toUint8Array(`--${BOUNDARY}--\r\n`));
+  // Batch-append the uploaded URLs (e.g. to a listing) with one JSON call.
+  const appendEndpoint =
+    options.fileField === "photos" ? "/listings/photos/attach" : null;
 
-  const body = concatBytes(chunks);
-
-  const res = await expoFetch(`${DEFAULT_API_URL}${endpoint}`, {
-    method: "POST",
-    headers: {
-      ...authHeaders,
-      "Content-Type": `multipart/form-data; boundary=${BOUNDARY}`,
-      "Content-Length": String(body.byteLength),
-    },
-    body,
-  });
-
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    const msg =
-      data?.message ||
-      (data?.errors ? Object.values(data.errors).flat().join(", ") : null) ||
-      `Upload failed (${res.status})`;
-    throw new Error(msg);
+  if (appendEndpoint && responses.length > 0) {
+    const listingIdField = (options.fields || []).find(
+      (f) => f.fieldName === "listing_id"
+    );
+    const urls = responses.flatMap((r) => r?.photo_urls || []);
+    if (urls.length > 0) {
+      return postJson(`/messes/${listingIdField?.value}${appendEndpoint}`, {
+        listing_id: listingIdField?.value,
+        photo_urls: urls,
+      }).catch(() => responses[responses.length - 1]);
+    }
   }
-  return data;
+
+  return responses[responses.length - 1];
 }

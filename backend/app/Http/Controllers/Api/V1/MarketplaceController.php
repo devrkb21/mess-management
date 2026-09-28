@@ -346,6 +346,52 @@ class MarketplaceController extends Controller
     }
 
     /**
+     * POST /api/v1/messes/{mess}/listings/photos/attach
+     * Attach already-uploaded photo URLs (returned by the per-file upload
+     * endpoint) to a listing in one call. Used by mobile clients that upload
+     * one request per file.
+     */
+    public function attachPhotos(Request $request, string $mess): JsonResponse
+    {
+        $messModel = Mess::findOrFail($mess);
+
+        $user = $request->user();
+        $isAuthorized = $user->is_superadmin ||
+            Residency::where('user_id', $user->id)
+                ->where('mess_id', $messModel->id)
+                ->whereIn('role', ['owner', 'manager'])
+                ->where('status', 'active')
+                ->exists();
+
+        if (! $isAuthorized) {
+            return response()->json(['message' => 'Unauthorized to modify photos for this mess.'], 403);
+        }
+
+        $validated = $request->validate([
+            'listing_id' => ['required', 'uuid', 'exists:listings,id'],
+            'photo_urls' => ['required', 'array', 'min:1', 'max:10'],
+            'photo_urls.*' => ['required', 'string', 'max:500'],
+        ]);
+
+        $listing = Listing::where('mess_id', $messModel->id)->findOrFail($validated['listing_id']);
+
+        $maxSort = (int) $listing->photos()->max('sort_order');
+
+        foreach ($validated['photo_urls'] as $idx => $url) {
+            ListingPhoto::create([
+                'listing_id' => $listing->id,
+                'photo_url' => $url,
+                'sort_order' => $maxSort + 1 + $idx,
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Photos attached successfully.',
+            'listing' => $listing->fresh(['photos']),
+        ], 201);
+    }
+
+    /**
      * PATCH /api/v1/marketplace/listings/{id}
      */
     public function update(Request $request, string $id): JsonResponse

@@ -16,6 +16,12 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# Next.js standalone binds to the literal $HOSTNAME value. In a container that
+# resolves to the eth0 IP only, so a loopback healthcheck (127.0.0.1:3000)
+# gets connection refused while the published port still works. Bind all
+# interfaces explicitly.
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public

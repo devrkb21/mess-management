@@ -179,6 +179,66 @@ class VacancyMarketplaceApiTest extends TestCase
         $response->assertStatus(403);
     }
 
+    public function test_manager_can_upload_listing_photos_without_listing(): void
+    {
+        $response = $this->actingAs($this->owner)
+            ->post("/api/v1/messes/{$this->mess->id}/listings/photos", [
+                'photos' => [
+                    UploadedFile::fake()->image('room-a.jpg'),
+                    UploadedFile::fake()->image('room-b.png'),
+                ],
+            ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('message', 'Photos uploaded successfully.');
+
+        $this->assertCount(2, $response->json('photo_urls'));
+        $this->assertNull($response->json('listing'));
+        Storage::disk('public')->assertExists('listing-photos/'.basename($response->json('photo_urls.0')));
+    }
+
+    public function test_photos_can_be_attached_to_existing_listing_while_uploading(): void
+    {
+        $listing = $this->createListing();
+
+        $response = $this->actingAs($this->owner)
+            ->post("/api/v1/messes/{$this->mess->id}/listings/photos", [
+                'listing_id' => $listing->id,
+                'photos' => [
+                    UploadedFile::fake()->image('room.jpg', 600, 400),
+                ],
+            ]);
+
+        $response->assertStatus(201);
+
+        $this->assertCount(1, $listing->fresh()->photos);
+        $this->assertStringContainsString('listing-photos/', $response->json('listing.photos.0.photo_url'));
+    }
+
+    public function test_photo_upload_rejects_non_image_files(): void
+    {
+        $response = $this->actingAs($this->owner)
+            ->post("/api/v1/messes/{$this->mess->id}/listings/photos", [
+                'photos' => [
+                    UploadedFile::fake()->create('notes.pdf', 100, 'application/pdf'),
+                ],
+            ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_photo_upload_is_forbidden_for_regular_residents(): void
+    {
+        $response = $this->actingAs($this->resident)
+            ->post("/api/v1/messes/{$this->mess->id}/listings/photos", [
+                'photos' => [
+                    UploadedFile::fake()->image('room.jpg'),
+                ],
+            ]);
+
+        $response->assertStatus(403);
+    }
+
     public function test_vacancy_analytics_summarizes_views_applications_and_fill_time(): void
     {
         // Another mess in the same city to build a marketplace average

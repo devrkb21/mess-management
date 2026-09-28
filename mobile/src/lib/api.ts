@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DEFAULT_API_URL, STORAGE_KEYS } from "../constants/config";
+import { uploadMultipart, type UploadFile } from "./upload";
 
 let cachedApiUrl: string | null = null;
 
@@ -218,26 +219,30 @@ export const api = {
     apiRequest(`/messes/${messId}/listings`, { method: "POST", body: JSON.stringify(payload) }),
   getMessListings: (messId: string) => apiRequest(`/messes/${messId}/listings`),
   uploadListingPhotos: (messId: string, files: any[], listingId?: string) => {
-    const formData = new FormData();
-    if (listingId) formData.append("listing_id", listingId);
-    files.forEach((file: any, idx: number) => {
-      formData.append("photos[]", {
-        uri: file.uri,
-        name: file.fileName || `photo-${idx}.jpg`,
-        type: file.mimeType || "image/jpeg",
-      } as any);
+    const uploadFiles: UploadFile[] = files.map((file: any) => ({
+      uri: file.uri,
+      name: file.fileName || undefined,
+      mimeType: file.mimeType || "image/jpeg",
+    }));
+    return uploadMultipart(`/messes/${messId}/listings/photos`, {
+      fields: listingId ? [{ fieldName: "listing_id", value: listingId }] : [],
+      fileField: "photos",
+      files: uploadFiles,
+      fallbackExtension: "jpg",
     });
-    return apiRequest(`/messes/${messId}/listings/photos`, { method: "POST", body: formData });
   },
   uploadListingVideo: (messId: string, listingId: string, file: any) => {
-    const formData = new FormData();
-    formData.append("listing_id", listingId);
-    formData.append("video", {
+    const uploadFile: UploadFile = {
       uri: file.uri,
-      name: file.fileName || "walkthrough.mp4",
-      type: file.mimeType || "video/mp4",
-    } as any);
-    return apiRequest(`/messes/${messId}/listings/video`, { method: "POST", body: formData });
+      name: file.fileName || undefined,
+      mimeType: file.mimeType || "video/mp4",
+    };
+    return uploadMultipart(`/messes/${messId}/listings/video`, {
+      fields: [{ fieldName: "listing_id", value: listingId }],
+      fileField: "video",
+      files: [uploadFile],
+      fallbackExtension: "mp4",
+    });
   },
 
   // Applications & Waiting List (#29, #33, #34, #35)

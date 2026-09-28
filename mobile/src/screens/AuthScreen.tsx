@@ -106,6 +106,12 @@ export function AuthScreen() {
             >
               <Text style={styles.demoChipText}>Sakib (Resident)</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.demoChip, email === "tanvir@mess.com" && styles.demoChipActive]}
+              onPress={() => fillDemo("tanvir@mess.com")}
+            >
+              <Text style={styles.demoChipText}>Tanvir (Resident)</Text>
+            </TouchableOpacity>
           </ScrollView>
         </View>
 

@@ -60,7 +60,7 @@ export function BillsScreen() {
         if (mRes?.bills) {
           setMessBills(mRes.bills);
           const totalBilled = mRes.bills.reduce((sum: number, b: any) => sum + Number(b.total_payable || 0), 0);
-          const totalCollected = mRes.bills.reduce((sum: number, b: any) => sum + Number(b.paid_amount || 0), 0);
+          const totalCollected = mRes.bills.reduce((sum: number, b: any) => sum + Number(b.total_paid || 0), 0);
           const totalDues = mRes.bills.reduce((sum: number, b: any) => sum + Number(b.remaining_due || 0), 0);
           setMessBillsSummary({ totalBilled, totalCollected, totalDues });
         }
@@ -531,7 +531,7 @@ export function BillsScreen() {
                 <View style={styles.invoiceTableRow}>
                   <Text style={styles.invoiceItemTitle}>Amount Paid</Text>
                   <Text style={[styles.invoiceItemAmount, { color: "#059669" }]}>
-                    ৳{Number(invoiceModalBill?.paid_amount || 0).toFixed(2)}
+                    ৳{Number(invoiceModalBill?.total_paid || 0).toFixed(2)}
                   </Text>
                 </View>
 

@@ -2,10 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\BookingApplication;
 use App\Models\DailyMealLog;
 use App\Models\ExpenseEntry;
+use App\Models\Listing;
 use App\Models\Mess;
-use App\Models\Residency;
 use Carbon\Carbon;
 
 class AnalyticsService
@@ -173,6 +174,92 @@ class AnalyticsService
             'potential_full_revenue' => $potentialMonthlyRent,
             'vacancy_revenue_loss' => $vacancyLossMonthly,
             'health_rating' => $occupancyRate >= 85 ? 'Excellent' : ($occupancyRate >= 60 ? 'Moderate' : 'High Vacancy Alert'),
+        ];
+    }
+
+    /**
+     * Vacancy & Marketplace Performance Analytics (#46)
+     * Views, application rate, time-to-fill and pricing position per listing.
+     */
+    public function getVacancyAnalytics(Mess $mess): array
+    {
+        $listings = $mess->listings()->with(['bed:id,label', 'room:id,name'])->get();
+
+        $totalViews = 0;
+        $totalApplications = 0;
+        $totalAccepted = 0;
+        $timeToFillDays = [];
+
+        $perListing = $listings->map(function ($listing) use (&$totalViews, &$totalApplications, &$totalAccepted, &$timeToFillDays) {
+            $applications = BookingApplication::where('listing_id', $listing->id)->get();
+            $views = (int) $listing->views_count;
+            $count = $applications->count();
+            $accepted = $applications->where('status', 'accepted')->count();
+
+            $totalViews += $views;
+            $totalApplications += $count;
+            $totalAccepted += $accepted;
+
+            // Time-to-fill: days from publish to the first accepted application
+            foreach ($applications->where('status', 'accepted')->sortBy('created_at') as $app) {
+                if ($listing->created_at) {
+                    $timeToFillDays[] = $listing->created_at->diffInDays($app->created_at);
+                }
+                break;
+            }
+
+            $conversion = $views > 0 ? round(($count / $views) * 100, 1) : 0.0;
+
+            return [
+                'id' => $listing->id,
+                'title' => $listing->title,
+                'bed_label' => $listing->bed?->label,
+                'room_name' => $listing->room?->name,
+                'is_active' => $listing->is_active,
+                'views_count' => $views,
+                'applications_count' => $count,
+                'accepted_count' => $accepted,
+                'application_rate_percentage' => $conversion,
+                'rent_amount' => (float) $listing->rent_amount,
+                'posted_at' => $listing->created_at?->toDateString(),
+            ];
+        });
+
+        $avgTimeToFill = count($timeToFillDays) > 0
+            ? round(array_sum($timeToFillDays) / count($timeToFillDays), 1)
+            : null;
+
+        // Pricing position: mess avg rent vs marketplace avg in the same city
+        $cityAvgRent = (float) Listing::where('is_active', true)
+            ->whereHas('mess', fn ($q) => $q->where('city', $mess->city))
+            ->avg('rent_amount');
+        $messAvgRent = (float) $listings->avg('rent_amount');
+        $cityAvgRent = round($cityAvgRent, 2);
+        $messAvgRent = round($messAvgRent, 2);
+
+        $pricePosition = 'average';
+        if ($cityAvgRent > 0 && $messAvgRent > 0) {
+            $diffPercent = round((($messAvgRent - $cityAvgRent) / $cityAvgRent) * 100, 1);
+            $pricePosition = $diffPercent > 5 ? 'above_market' : ($diffPercent < -5 ? 'below_market' : 'average');
+        }
+
+        $applicationRate = $totalViews > 0 ? round(($totalApplications / $totalViews) * 100, 1) : 0.0;
+
+        return [
+            'summary' => [
+                'total_listings' => $listings->count(),
+                'active_listings' => $listings->where('is_active', true)->count(),
+                'total_views' => $totalViews,
+                'total_applications' => $totalApplications,
+                'total_accepted' => $totalAccepted,
+                'application_rate_percentage' => $applicationRate,
+                'average_time_to_fill_days' => $avgTimeToFill,
+                'average_rent' => $messAvgRent,
+                'city_average_rent' => $cityAvgRent,
+                'city_name' => $mess->city,
+                'price_position' => $pricePosition,
+            ],
+            'listings' => $perListing->values()->all(),
         ];
     }
 }

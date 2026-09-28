@@ -93,4 +93,4 @@ Actions.
 
 ## Documentation
 
-- [Complete Build Guide](.gemini/mess-platform-agent-guide.md)
+- [Complete Build Guide](mess-platform-agent-guide.md)

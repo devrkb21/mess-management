@@ -60,6 +60,32 @@ return [
             'report' => false,
         ],
 
+        // Cloudflare R2 (S3-compatible) — file storage target.
+        // Canonical R2_* variable names, with AWS_* fallbacks so credentials
+        // may also be supplied under the S3-style names. Falls back to the
+        // local 'public' disk when no bucket is configured, so local dev and
+        // tests keep working without any bucket.
+        'r2' => [
+            'driver' => 's3',
+            'key' => env('R2_ACCESS_KEY_ID', env('AWS_ACCESS_KEY_ID')),
+            'secret' => env('R2_SECRET_ACCESS_KEY', env('AWS_SECRET_ACCESS_KEY')),
+            'region' => env('R2_REGION', env('AWS_DEFAULT_REGION', 'auto')),
+            'bucket' => env('R2_BUCKET', env('AWS_BUCKET')),
+            'endpoint' => env('R2_ENDPOINT', env('AWS_ENDPOINT')),
+            'url' => env('R2_PUBLIC_URL'),
+            'use_path_style_endpoint' => env('R2_USE_PATH_STYLE_ENDPOINT', env('AWS_USE_PATH_STYLE_ENDPOINT', false)),
+            'visibility' => 'public',
+            'throw' => false,
+            'report' => false,
+            // TLS verification for the R2 endpoint. Windows PHP builds ship
+            // without a CA bundle, so a project-local copy (backend/cacert.pem)
+            // is used by default. Set R2_CA_BUNDLE=false to disable, or point
+            // it at a custom bundle.
+            'http' => [
+                'verify' => ($caBundle = env('R2_CA_BUNDLE', base_path('cacert.pem'))) === 'false' ? false : $caBundle,
+            ],
+        ],
+
     ],
 
     /*

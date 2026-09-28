@@ -198,9 +198,9 @@ export default function ExpensesPage() {
 
     try {
       await api.assignBazarSchedule(currentMessId, {
-        residency_id: assignResidencyId,
+        assigned_residency_id: assignResidencyId,
         date: assignDate,
-        notes: assignNotes || null,
+        note: assignNotes || null,
       });
 
       setMessage("Bazar duty assigned successfully!");

@@ -155,7 +155,7 @@ export function SecuritySection() {
     try {
       const res = await api.verifyVisitorPass(currentMessId, verifyCode.trim());
       setVerifyResult(res);
-      Alert.alert("Entry Approved", `Visitor: ${res.pass?.guest_name}\nHost: ${res.pass?.resident?.name || "Resident"}`);
+      Alert.alert("Entry Approved", `Visitor: ${res.pass?.guest_name}\nHost: ${res.host?.name || res.pass?.resident?.name || "Resident"}`);
       loadData();
     } catch (err: any) {
       setVerifyResult({ verified: false, message: err.message || "Invalid or expired pass" });
@@ -168,7 +168,7 @@ export function SecuritySection() {
   const handleSharePass = async (pass: any) => {
     try {
       await Share.share({
-        message: `Your entry pass for ${pass.mess?.name || "Mess"} is: ${pass.pass_code}. Valid for ${pass.valid_hours} hours. Please show this at the entrance gate.`,
+        message: `Your entry pass for ${pass.mess?.name || "Mess"} is: ${pass.pass_code}. Show this at the entrance gate.`,
       });
     } catch {
       // ignore
@@ -282,7 +282,7 @@ export function SecuritySection() {
                 </Text>
 
                 <View style={styles.tokenBox}>
-                  <Text style={styles.tokenText}>{diningData?.dining_token || "------"}</Text>
+                  <Text style={styles.tokenText}>{(diningData?.qr_payload || diningData?.token || "------").replace("MESS_DINING:", "")}</Text>
                   <Text style={styles.tokenExpiry}>
                     Valid today for {diningData?.meal_type?.toUpperCase() || selectedSlot.toUpperCase()}
                   </Text>
@@ -438,7 +438,7 @@ export function SecuritySection() {
                         {verifyResult.pass && (
                           <Text style={styles.verifyResultMeta}>
                             Guest: {verifyResult.pass.guest_name} • Host:{" "}
-                            {verifyResult.pass.resident?.name || "Resident"}
+                            {verifyResult.host?.name || "Resident"}
                           </Text>
                         )}
                       </View>
@@ -458,30 +458,30 @@ export function SecuritySection() {
                       <View>
                         <Text style={styles.passGuestName}>{pass.guest_name}</Text>
                         <Text style={styles.passMeta}>
-                          {pass.purpose.toUpperCase()} • Valid {pass.valid_hours}h
+                          {pass.purpose.toUpperCase()} • Until {new Date(pass.valid_until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </Text>
                       </View>
                       <View
                         style={[
                           styles.passStatusBadge,
-                          pass.status === "active"
-                            ? { backgroundColor: "#ecfdf5" }
-                            : pass.status === "used"
+                          pass.is_used
                             ? { backgroundColor: "#eff6ff" }
-                            : { backgroundColor: "#fef2f2" },
+                            : new Date(pass.valid_until) < new Date()
+                            ? { backgroundColor: "#fef2f2" }
+                            : { backgroundColor: "#ecfdf5" },
                         ]}
                       >
                         <Text
                           style={[
                             styles.passStatusText,
-                            pass.status === "active"
-                              ? { color: "#059669" }
-                              : pass.status === "used"
+                            pass.is_used
                               ? { color: "#2563eb" }
-                              : { color: "#dc2626" },
+                              : new Date(pass.valid_until) < new Date()
+                              ? { color: "#dc2626" }
+                              : { color: "#059669" },
                           ]}
                         >
-                          {pass.status.toUpperCase()}
+                          {pass.is_used ? "USED" : new Date(pass.valid_until) < new Date() ? "EXPIRED" : "ACTIVE"}
                         </Text>
                       </View>
                     </View>
@@ -517,7 +517,7 @@ export function SecuritySection() {
                       Standard Hostel & Mess Living Rules & Terms
                     </Text>
                   </View>
-                  {agreement?.is_signed ? (
+                  {agreement?.status === "signed" ? (
                     <View style={styles.signedBadge}>
                       <Ionicons name="checkmark-circle" size={14} color="#059669" />
                       <Text style={styles.signedText}>Signed</Text>
@@ -538,13 +538,13 @@ export function SecuritySection() {
                   <Text style={styles.termsItem}>• Security deposit will be refunded upon clearance inspection.</Text>
                 </View>
 
-                {agreement?.is_signed ? (
+                {agreement?.status === "signed" ? (
                   <View style={styles.signedInfoBox}>
                     <Ionicons name="shield-checkmark" size={18} color="#059669" />
                     <View style={{ flex: 1, marginLeft: 8 }}>
                       <Text style={styles.signedInfoName}>Digitally Signed by: {agreement.signature_name}</Text>
                       <Text style={styles.signedInfoDate}>
-                        Date: {new Date(agreement.signed_at).toLocaleDateString()} • IP: {agreement.ip_address || "Logged"}
+                        Date: {new Date(agreement.signed_at).toLocaleDateString()} • IP: {agreement.signed_ip || "Logged"}
                       </Text>
                     </View>
                   </View>
@@ -566,7 +566,7 @@ export function SecuritySection() {
                   {messAgreements.map((ag) => (
                     <View key={ag.id} style={styles.managerAgRow}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.agResidentName}>{ag.resident?.name || "Resident"}</Text>
+                        <Text style={styles.agResidentName}>{ag.residency?.user?.name || "Resident"}</Text>
                         <Text style={styles.agResidentSub}>
                           {ag.signature_name ? `Signed as "${ag.signature_name}"` : "Pending Signature"}
                         </Text>
@@ -574,16 +574,16 @@ export function SecuritySection() {
                       <View
                         style={[
                           styles.agStatusPill,
-                          ag.is_signed ? { backgroundColor: "#ecfdf5" } : { backgroundColor: "#fef2f2" },
+                          ag.status === "signed" ? { backgroundColor: "#ecfdf5" } : { backgroundColor: "#fef2f2" },
                         ]}
                       >
                         <Text
                           style={[
                             styles.agStatusPillText,
-                            ag.is_signed ? { color: "#059669" } : { color: "#dc2626" },
+                            ag.status === "signed" ? { color: "#059669" } : { color: "#dc2626" },
                           ]}
                         >
-                          {ag.is_signed ? "Signed" : "Pending"}
+                          {ag.status === "signed" ? "Signed" : "Pending"}
                         </Text>
                       </View>
                     </View>

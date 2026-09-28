@@ -32,5 +32,16 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!-- Never reach the real Cloudflare R2 bucket from tests: force the
+             media storage fallback to the (faked) local public disk. -->
+        <env name="R2_ACCESS_KEY_ID" value=""/>
+        <env name="R2_SECRET_ACCESS_KEY" value=""/>
+        <env name="R2_BUCKET" value=""/>
+        <env name="R2_ENDPOINT" value=""/>
+        <env name="R2_PUBLIC_URL" value=""/>
+        <env name="AWS_ACCESS_KEY_ID" value=""/>
+        <env name="AWS_SECRET_ACCESS_KEY" value=""/>
+        <env name="AWS_BUCKET" value=""/>
+        <env name="AWS_ENDPOINT" value=""/>
     </php>
 </phpunit>

@@ -96,7 +96,7 @@ export default function AnalyticsPage() {
       await api.postNotice(currentMessId, {
         title: lang === "bn" ? generatedNotice.title_bn : generatedNotice.title_en,
         body: lang === "bn" ? generatedNotice.body_bn : generatedNotice.body_en,
-        is_pinned: Boolean(generatedNotice.suggested_pinned),
+        pinned: Boolean(generatedNotice.suggested_pinned),
       });
       alert(`Notice published successfully in ${lang === "bn" ? "Bengali" : "English"}!`);
     } catch (err: any) {

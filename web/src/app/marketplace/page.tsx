@@ -20,6 +20,8 @@ import {
   CheckCircle2,
   X,
   Plus,
+  List,
+  Map,
 } from "lucide-react";
 
 export default function MarketplacePage() {
@@ -40,6 +42,11 @@ export default function MarketplacePage() {
   const [sortBy, setSortBy] = useState("newest");
   const [showFiltersDrawer, setShowFiltersDrawer] = useState(false);
   const [onlyFavorites, setOnlyFavorites] = useState(false);
+
+  // Map view state (#26)
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
+  const [mapPins, setMapPins] = useState<any[]>([]);
+  const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
 
   const isManager = currentResidency?.role === "owner" || currentResidency?.role === "manager";
 
@@ -95,7 +102,55 @@ export default function MarketplacePage() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     fetchListings();
+    if (viewMode === "map") {
+      fetchMapPins();
+    }
   };
+
+  const fetchMapPins = async () => {
+    setLoading(true);
+    try {
+      const params: Record<string, any> = {
+        query: searchQuery,
+        city: city,
+        min_rent: minRent,
+        max_rent: maxRent,
+        gender_policy: genderPolicy,
+      };
+      const res = await api.getMapListings(params);
+      setMapPins(res.pins || []);
+      setSelectedPinId(null);
+    } catch (err) {
+      console.error("Failed to load map pins", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (viewMode === "map") {
+      fetchMapPins();
+    }
+  }, [viewMode, city, minRent, maxRent, genderPolicy]);
+
+  // Convert geo coordinates into percentage positions on the schematic canvas
+  const pinPosition = (pin: any, pins: any[]) => {
+    const lats = pins.map((p) => p.latitude);
+    const lngs = pins.map((p) => p.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    const latSpan = maxLat - minLat || 0.01;
+    const lngSpan = maxLng - minLng || 0.01;
+    const pad = 8; // keep pins away from the canvas edge
+    return {
+      x: pad + ((pin.longitude - minLng) / lngSpan) * (100 - pad * 2),
+      y: pad + ((maxLat - pin.latitude) / latSpan) * (100 - pad * 2),
+    };
+  };
+
+  const selectedPinDetails = mapPins.find((p) => p.id === selectedPinId) || null;
 
   const toggleFavorite = async (e: React.MouseEvent, listingId: string) => {
     e.preventDefault();
@@ -428,6 +483,26 @@ export default function MarketplacePage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* List / Map toggle (#26) */}
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden shadow-2xs">
+              <button
+                onClick={() => setViewMode("list")}
+                className={`px-3 py-2 text-xs font-bold flex items-center gap-1 transition ${
+                  viewMode === "list" ? "bg-emerald-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <List className="h-3.5 w-3.5" /> List
+              </button>
+              <button
+                onClick={() => setViewMode("map")}
+                className={`px-3 py-2 text-xs font-bold flex items-center gap-1 transition ${
+                  viewMode === "map" ? "bg-emerald-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <Map className="h-3.5 w-3.5" /> Map
+              </button>
+            </div>
+
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
@@ -441,8 +516,111 @@ export default function MarketplacePage() {
           </div>
         </div>
 
+        {/* Map View (#26) — schematic geo canvas; swap in Leaflet/Google Maps later */}
+        {viewMode === "map" && !loading && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="lg:col-span-2 relative h-[480px] rounded-2xl border border-gray-200 overflow-hidden bg-gradient-to-br from-emerald-50 via-teal-50 to-sky-100">
+              {/* Decorative "roads" */}
+              <div className="absolute inset-0 opacity-40">
+                <div className="absolute left-0 right-0 top-1/3 h-0.5 bg-white" />
+                <div className="absolute left-0 right-0 top-2/3 h-0.5 bg-white" />
+                <div className="absolute top-0 bottom-0 left-1/3 w-0.5 bg-white" />
+                <div className="absolute top-0 bottom-0 left-2/3 w-0.5 bg-white" />
+              </div>
+
+              {mapPins.length === 0 ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+                  <MapPin className="h-10 w-10 text-gray-400 mb-3" />
+                  <h3 className="font-bold text-gray-700">No Geolocated Vacancies</h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Listings with coordinates appear here as price pins. Managers can add lat/lng when posting.
+                  </p>
+                </div>
+              ) : (
+                mapPins.map((pin) => {
+                  const { x, y } = pinPosition(pin, mapPins);
+                  const isSelected = selectedPinId === pin.id;
+                  return (
+                    <button
+                      key={pin.id}
+                      onClick={() => setSelectedPinId(isSelected ? null : pin.id)}
+                      style={{ left: `${x}%`, top: `${y}%` }}
+                      className={`absolute -translate-x-1/2 -translate-y-full transition-transform hover:scale-110 ${
+                        isSelected ? "z-20 scale-110" : "z-10"
+                      }`}
+                    >
+                      <span
+                        className={`px-2 py-1 rounded-lg shadow-md text-2xs font-black whitespace-nowrap border ${
+                          isSelected
+                            ? "bg-emerald-600 text-white border-emerald-700"
+                            : "bg-white text-emerald-800 border-emerald-200"
+                        }`}
+                      >
+                        ৳{Number(pin.rent_amount).toLocaleString()}
+                      </span>
+                      <span
+                        className={`block w-2 h-2 rounded-full mx-auto -mt-0.5 ${
+                          isSelected ? "bg-emerald-600" : "bg-emerald-400"
+                        }`}
+                      />
+                    </button>
+                  );
+                })
+              )}
+
+              <div className="absolute bottom-3 left-3 bg-white/85 backdrop-blur-xs px-3 py-1.5 rounded-lg text-2xs text-gray-600 shadow">
+                {mapPins.length} pin{mapPins.length === 1 ? "" : "s"} • click a price pin for details
+              </div>
+            </div>
+
+            {/* Selected Pin Preview Panel */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 min-h-[480px]">
+              {selectedPinDetails ? (
+                <div className="space-y-4">
+                  {selectedPinDetails.photo_url && (
+                    <img
+                      src={selectedPinDetails.photo_url}
+                      alt={selectedPinDetails.title}
+                      className="w-full h-40 object-cover rounded-xl"
+                    />
+                  )}
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-lg">{selectedPinDetails.title}</h3>
+                    <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                      <MapPin className="h-3 w-3" /> {selectedPinDetails.area_name || selectedPinDetails.city} • {selectedPinDetails.mess_name}
+                    </p>
+                  </div>
+                  <div className="text-2xl font-black text-emerald-900">
+                    ৳{Number(selectedPinDetails.rent_amount).toLocaleString()}
+                    <span className="text-xs font-normal text-gray-400"> /month</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-2xs">
+                    <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-md capitalize">
+                      {selectedPinDetails.room_type}
+                    </span>
+                    <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-md capitalize">
+                      {selectedPinDetails.gender_policy} mess
+                    </span>
+                  </div>
+                  <Link
+                    href={`/marketplace/${selectedPinDetails.id}`}
+                    className="block text-center bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-sm transition"
+                  >
+                    View Full Listing
+                  </Link>
+                </div>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-center text-gray-400">
+                  <Map className="h-10 w-10 mb-3" />
+                  <p className="text-xs">Select a price pin on the map to preview the listing.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Listings Grid */}
-        {loading ? (
+        {viewMode === "list" && loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3, 4, 5, 6].map((n) => (
               <div
@@ -458,7 +636,7 @@ export default function MarketplacePage() {
               </div>
             ))}
           </div>
-        ) : listings.length === 0 ? (
+        ) : viewMode === "list" && listings.length === 0 ? (
           <div className="bg-white rounded-2xl border border-dashed border-gray-300 p-12 text-center max-w-xl mx-auto my-12">
             <BedDouble className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-bold text-gray-800">No Vacancies Found</h3>
@@ -482,7 +660,7 @@ export default function MarketplacePage() {
               )}
             </div>
           </div>
-        ) : (
+        ) : viewMode === "list" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {listings.map((item) => {
               const mainPhoto =
@@ -602,7 +780,7 @@ export default function MarketplacePage() {
               );
             })}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

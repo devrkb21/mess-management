@@ -11,8 +11,8 @@ export default function SuperadminLoginPage() {
   const router = useRouter();
   const { login } = useAuth();
 
-  const [email, setEmail] = useState("admin@messplatform.com");
-  const [password, setPassword] = useState("superadmin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -78,7 +78,7 @@ export default function SuperadminLoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@messplatform.com"
+                placeholder="your-superadmin@email.com"
                 className="mt-1.5 block w-full rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 shadow-inner focus:border-indigo-500 focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
               />
             </div>

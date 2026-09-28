@@ -42,6 +42,7 @@ Route::prefix('auth')->group(function () {
 Route::get('/marketplace/listings', [MarketplaceController::class, 'index']);
 Route::get('/marketplace/listings/{id}', [MarketplaceController::class, 'show']);
 Route::get('/marketplace/listings/{id}/share-qr', [MarketplaceController::class, 'shareQr']);
+Route::get('/marketplace/map', [MarketplaceController::class, 'map']);
 
 // ── Public Trust & Reviews (#39, #40) ────────────────────────────────────
 Route::get('/messes/{mess}/trust-score', [TrustCommunityController::class, 'getMessTrustScore']);
@@ -113,6 +114,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
             // Marketplace management for mess
             Route::post('/listings', [MarketplaceController::class, 'store']);
+            Route::post('/listings/video', [MarketplaceController::class, 'uploadVideo']);
             Route::get('/listings', [MarketplaceController::class, 'messListings']);
             Route::get('/applications', [BookingApplicationController::class, 'messApplications']);
             Route::get('/visits', [VisitScheduleController::class, 'messVisits']);
@@ -130,6 +132,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/ai/generate-notice', [AiAnalyticsController::class, 'generateNotice']);
             Route::get('/analytics/predictive-budget', [AiAnalyticsController::class, 'predictiveBudget']);
             Route::get('/analytics/occupancy', [AiAnalyticsController::class, 'occupancyAnalytics']);
+            Route::get('/analytics/vacancy', [AiAnalyticsController::class, 'vacancyAnalytics']);
         });
 
         // Join waiting list (any auth user)

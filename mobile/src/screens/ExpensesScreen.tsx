@@ -139,9 +139,9 @@ export function ExpensesScreen() {
     setLoading(true);
     try {
       await api.assignBazarSchedule(currentMessId, {
-        residency_id: assignResidencyId,
+        assigned_residency_id: assignResidencyId,
         date: assignDate,
-        notes: assignNotes || null,
+        note: assignNotes || null,
       });
       Alert.alert("Success", "Bazar duty assigned successfully!");
       setAssignModal(false);

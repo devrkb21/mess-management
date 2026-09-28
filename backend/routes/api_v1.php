@@ -116,6 +116,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/listings', [MarketplaceController::class, 'store']);
             Route::post('/listings/video', [MarketplaceController::class, 'uploadVideo']);
             Route::post('/listings/photos', [MarketplaceController::class, 'uploadPhotos']);
+            Route::post('/listings/photos/attach', [MarketplaceController::class, 'attachPhotos']);
             Route::get('/listings', [MarketplaceController::class, 'messListings']);
             Route::get('/applications', [BookingApplicationController::class, 'messApplications']);
             Route::get('/visits', [VisitScheduleController::class, 'messVisits']);

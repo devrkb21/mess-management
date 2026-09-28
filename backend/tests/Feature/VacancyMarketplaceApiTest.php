@@ -239,6 +239,42 @@ class VacancyMarketplaceApiTest extends TestCase
         $response->assertStatus(403);
     }
 
+    public function test_photo_urls_can_be_attached_to_a_listing_in_batch(): void
+    {
+        $listing = $this->createListing();
+
+        $response = $this->actingAs($this->owner)
+            ->post("/api/v1/messes/{$this->mess->id}/listings/photos/attach", [
+                'listing_id' => $listing->id,
+                'photo_urls' => [
+                    'https://r2.example.com/listing-photos/a.png',
+                    'https://r2.example.com/listing-photos/b.png',
+                ],
+            ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('message', 'Photos attached successfully.');
+
+        $this->assertCount(2, $listing->fresh()->photos);
+        $this->assertEquals(
+            'https://r2.example.com/listing-photos/a.png',
+            $listing->fresh()->photos->first()->photo_url
+        );
+    }
+
+    public function test_photo_attach_validates_input(): void
+    {
+        $listing = $this->createListing();
+
+        $response = $this->actingAs($this->resident)
+            ->post("/api/v1/messes/{$this->mess->id}/listings/photos/attach", [
+                'listing_id' => $listing->id,
+                'photo_urls' => ['https://r2.example.com/listing-photos/a.png'],
+            ]);
+
+        $response->assertStatus(403);
+    }
+
     public function test_vacancy_analytics_summarizes_views_applications_and_fill_time(): void
     {
         // Another mess in the same city to build a marketplace average

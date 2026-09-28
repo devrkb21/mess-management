@@ -1,5 +1,9 @@
 FROM php:8.5-cli-alpine
 
+# Allow large media uploads (walk-through videos up to 50 MB).
+RUN echo "upload_max_filesize=64M\npost_max_size=68M\nmemory_limit=256M" \
+    > /usr/local/etc/php/conf.d/uploads.ini
+
 RUN apk add --no-cache $PHPIZE_DEPS icu-dev libpq-dev libzip-dev oniguruma-dev \
     && docker-php-ext-install intl mbstring pdo_pgsql zip \
     && pecl install redis \

@@ -13,11 +13,15 @@ import {
   Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
 export function MarketplaceScreen() {
-  const { user } = useAuth();
+  const { user, currentResidency } = useAuth();
+
+  const isManager =
+    currentResidency?.role === "owner" || currentResidency?.role === "manager";
 
   const [listings, setListings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +57,18 @@ export function MarketplaceScreen() {
   // Chat Form
   const [chatMessage, setChatMessage] = useState("");
   const [submittingChat, setSubmittingChat] = useState(false);
+
+  // Manager: Publish Vacancy (#23, #24, #25)
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [newRent, setNewRent] = useState("");
+  const [newDeposit, setNewDeposit] = useState("");
+  const [newArea, setNewArea] = useState("");
+  const [newAvailable, setNewAvailable] = useState(new Date().toISOString().split("T")[0]);
+  const [pickedPhotos, setPickedPhotos] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [pickedVideo, setPickedVideo] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [submittingCreate, setSubmittingCreate] = useState(false);
 
   const fetchListings = async () => {
     setLoading(true);
@@ -156,12 +172,126 @@ export function MarketplaceScreen() {
     }
   };
 
+  // ── Manager: media pickers (#24 photos, #25 video) ──
+  const takeInstantPhoto = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission Required", "Allow camera access to take photos.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8 });
+    if (!result.canceled && result.assets?.[0]) {
+      setPickedPhotos((prev) => [...prev, result.assets[0]].slice(0, 10));
+    }
+  };
+
+  const pickPhotosFromGallery = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission Required", "Allow photo library access to upload photos.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsMultipleSelection: true,
+      selectionLimit: 10,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets?.length) {
+      setPickedPhotos((prev) => [...prev, ...result.assets].slice(0, 10));
+    }
+  };
+
+  const recordWalkthroughVideo = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission Required", "Allow camera access to record the walk-through video.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["videos"],
+      videoMaxDuration: 60,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      setPickedVideo(result.assets[0]);
+    }
+  };
+
+  const resetCreateForm = () => {
+    setNewTitle("");
+    setNewDesc("");
+    setNewRent("");
+    setNewDeposit("");
+    setNewArea("");
+    setNewAvailable(new Date().toISOString().split("T")[0]);
+    setPickedPhotos([]);
+    setPickedVideo(null);
+  };
+
+  const handleCreateListing = async () => {
+    const messId = currentResidency?.mess_id || user?.residencies?.[0]?.mess_id;
+    if (!messId) {
+      Alert.alert("No Mess", "You need an active mess membership to publish a vacancy.");
+      return;
+    }
+    if (!newTitle.trim() || !newRent.trim()) {
+      Alert.alert("Required", "Please enter a title and the monthly rent.");
+      return;
+    }
+
+    setSubmittingCreate(true);
+    try {
+      // Upload photos directly from the device first (#24)
+      let photoUrls: string[] = [];
+      if (pickedPhotos.length > 0) {
+        const upRes = await api.uploadListingPhotos(messId, pickedPhotos);
+        photoUrls = upRes?.photo_urls || [];
+      }
+
+      const created = await api.createListing(messId, {
+        title: newTitle.trim(),
+        description: newDesc.trim() || null,
+        rent_amount: Number(newRent),
+        security_deposit: Number(newDeposit || 0),
+        available_from: newAvailable,
+        area_name: newArea.trim() || null,
+        amenities: [],
+        photos: photoUrls,
+      });
+
+      // Walk-through video recorded/selected on the phone (#25)
+      const listingId = created?.listing?.id;
+      if (pickedVideo && listingId) {
+        await api.uploadListingVideo(messId, listingId, pickedVideo);
+      }
+
+      Alert.alert("Published! 🎉", "Your vacancy listing is now live on the marketplace.");
+      setShowCreateModal(false);
+      resetCreateForm();
+      fetchListings();
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to publish listing.");
+    } finally {
+      setSubmittingCreate(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Search Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Vacancy Marketplace</Text>
-        <Text style={styles.headerSubtitle}>Explore verified mess seats in Bangladesh (#23–#28)</Text>
+        <View style={styles.headerTopRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>Vacancy Marketplace</Text>
+            <Text style={styles.headerSubtitle}>Explore verified mess seats in Bangladesh (#23–#28)</Text>
+          </View>
+          {isManager && (
+            <TouchableOpacity style={styles.publishBtn} onPress={() => setShowCreateModal(true)} activeOpacity={0.85}>
+              <Ionicons name="add-circle" size={16} color="#ffffff" />
+              <Text style={styles.publishBtnText}>Publish</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Search Input */}
         <View style={styles.searchRow}>
@@ -576,6 +706,129 @@ export function MarketplaceScreen() {
         </View>
       </Modal>
 
+      {/* ── Manager: Publish Vacancy Modal (#23, #24, #25) ── */}
+      <Modal visible={showCreateModal} animationType="slide" transparent>
+        <View style={styles.darkBackdrop}>
+          <View style={[styles.popupCard, { maxHeight: "92%" }]}>
+            <View style={styles.popupHeader}>
+              <Text style={styles.popupTitle}>Publish Vacancy (#23)</Text>
+              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+                <Ionicons name="close" size={20} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 480 }}>
+              <Text style={styles.inputLabel}>Listing Title *</Text>
+              <TextInput
+                style={styles.popupInput}
+                value={newTitle}
+                onChangeText={setNewTitle}
+                placeholder="e.g. Sunny single seat near DU"
+              />
+
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Monthly Rent (৳) *</Text>
+                  <TextInput
+                    style={styles.popupInput}
+                    value={newRent}
+                    onChangeText={setNewRent}
+                    placeholder="4500"
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Deposit (৳)</Text>
+                  <TextInput
+                    style={styles.popupInput}
+                    value={newDeposit}
+                    onChangeText={setNewDeposit}
+                    placeholder="0"
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.inputLabel}>Area</Text>
+              <TextInput
+                style={styles.popupInput}
+                value={newArea}
+                onChangeText={setNewArea}
+                placeholder="e.g. TSC, Dhaka University"
+              />
+
+              <Text style={styles.inputLabel}>Available From</Text>
+              <TextInput
+                style={styles.popupInput}
+                value={newAvailable}
+                onChangeText={setNewAvailable}
+                placeholder="YYYY-MM-DD"
+              />
+
+              <Text style={styles.inputLabel}>Description</Text>
+              <TextInput
+                style={[styles.popupInput, { height: 60 }]}
+                value={newDesc}
+                onChangeText={setNewDesc}
+                placeholder="Room environment, meals, rules..."
+                multiline
+              />
+
+              {/* Photos (#24) — direct camera / gallery upload */}
+              <Text style={styles.inputLabel}>Room Photos ({pickedPhotos.length}/10)</Text>
+              <View style={styles.mediaRow}>
+                <TouchableOpacity style={styles.mediaBtn} onPress={takeInstantPhoto}>
+                  <Ionicons name="camera" size={18} color="#059669" />
+                  <Text style={styles.mediaBtnText}>Camera</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.mediaBtn} onPress={pickPhotosFromGallery}>
+                  <Ionicons name="images" size={18} color="#4338ca" />
+                  <Text style={styles.mediaBtnText}>Gallery</Text>
+                </TouchableOpacity>
+              </View>
+              {pickedPhotos.length > 0 && (
+                <View style={styles.thumbRow}>
+                  {pickedPhotos.map((p, idx) => (
+                    <View key={`${p.uri}-${idx}`} style={styles.thumbWrapper}>
+                      <Image source={{ uri: p.uri }} style={styles.thumbImage} />
+                      <TouchableOpacity
+                        style={styles.thumbRemove}
+                        onPress={() => setPickedPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                      >
+                        <Ionicons name="close" size={12} color="#ffffff" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Walk-through video (#25) — instant record from the app */}
+              <Text style={styles.inputLabel}>Walk-through Video (max 60s)</Text>
+              <View style={styles.mediaRow}>
+                <TouchableOpacity style={styles.mediaBtn} onPress={recordWalkthroughVideo}>
+                  <Ionicons name="videocam" size={18} color="#dc2626" />
+                  <Text style={styles.mediaBtnText}>{pickedVideo ? "Re-record" : "Record"}</Text>
+                </TouchableOpacity>
+                {pickedVideo && (
+                  <View style={[styles.mediaBtn, { backgroundColor: "#ecfdf5" }]}>
+                    <Ionicons name="checkmark-circle" size={18} color="#059669" />
+                    <Text style={[styles.mediaBtnText, { color: "#059669" }]}>Video Ready</Text>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity style={styles.submitBtn} onPress={handleCreateListing} disabled={submittingCreate}>
+              {submittingCreate ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.submitBtnText}>Publish Listing</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Message Manager Chat Modal (#31) ── */}
       <Modal visible={showChatModal} animationType="slide" transparent>
         <View style={styles.darkBackdrop}>
@@ -626,6 +879,39 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 20, fontWeight: "800", color: "#111827" },
   headerSubtitle: { fontSize: 12, color: "#6b7280", marginTop: 2, marginBottom: 8 },
+  headerTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  publishBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#059669",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
+  },
+  publishBtnText: { color: "#ffffff", fontSize: 12, fontWeight: "700" },
+  mediaRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  mediaBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#f3f4f6",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  mediaBtnText: { fontSize: 12, fontWeight: "700", color: "#374151" },
+  thumbRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
+  thumbWrapper: { width: 54, height: 54, borderRadius: 8, overflow: "hidden" },
+  thumbImage: { width: "100%", height: "100%" },
+  thumbRemove: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    borderRadius: 9,
+    padding: 2,
+  },
   searchRow: {
     flexDirection: "row",
     alignItems: "center",

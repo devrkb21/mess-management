@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "MessBari",
     "slug": "mess-management",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -22,6 +22,16 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MessBari needs photo access to upload room photos for your vacancy listings.",
+          "cameraPermission": "MessBari needs camera access to take room photos and record walk-through videos.",
+          "microphonePermission": "MessBari needs microphone access while recording walk-through videos."
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "7e8cb63d-402f-4008-9975-24ff40e67c00"

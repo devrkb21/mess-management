@@ -1,0 +1,6 @@
+# EAS uploads only need the mobile app. Excluding the rest keeps Windows
+# archiving away from the backend Laravel storage symlink (EPERM).
+/backend
+/web
+/.github
+/.freebuff

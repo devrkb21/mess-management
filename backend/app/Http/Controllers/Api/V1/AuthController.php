@@ -29,7 +29,7 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Registration successful.',
-            'user' => $user,
+            'user' => $this->presentUser($user),
             'token' => $token,
         ], 201);
     }
@@ -54,7 +54,7 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Login successful.',
-            'user' => $user,
+            'user' => $this->presentUser($user),
             'token' => $token,
         ]);
     }
@@ -86,6 +86,23 @@ class AuthController extends Controller
 
         return response()->json([
             'user' => $user,
+        ]);
+    }
+
+    /**
+     * Serialize a user with the same residency shape as /me so clients can
+     * enter their mess dashboard immediately after login/register without
+     * needing an extra reload (previously the login payload omitted
+     * residencies, leaving currentMessId null until the next /me call).
+     */
+    private function presentUser(User $user): User
+    {
+        return $user->load([
+            'residencies' => function ($query) {
+                $query->whereIn('status', ['active', 'on_leave', 'invited']);
+            },
+            'residencies.mess:id,name,city,status,meal_cutoff_breakfast,meal_cutoff_lunch,meal_cutoff_dinner',
+            'residencies.bed:id,label',
         ]);
     }
 }

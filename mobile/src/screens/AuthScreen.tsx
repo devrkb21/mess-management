@@ -77,7 +77,7 @@ export function AuthScreen() {
             <Text style={styles.logoText}>M</Text>
           </View>
           <Text style={styles.title}>
-            Mess<Text style={styles.titleHighlight}>Platform</Text>
+            Mess<Text style={styles.titleHighlight}>Bari</Text>
           </Text>
           <Text style={styles.subtitle}>
             Bangladesh's complete shared living & mess management platform

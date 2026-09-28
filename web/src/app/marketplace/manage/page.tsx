@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import {
   Building2,
+  Image as ImageIcon,
   Plus,
   BedDouble,
   Users,
@@ -64,12 +65,14 @@ export default function ManageMarketplacePage() {
   const [newBedId, setNewBedId] = useState("");
   const [newRoomType, setNewRoomType] = useState("double");
   const [newGender, setNewGender] = useState("male");
-  const [newVideoUrl, setNewVideoUrl] = useState("");
+  const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
   const [newArea, setNewArea] = useState("");
   const [newAmenities, setNewAmenities] = useState<string[]>(["wifi"]);
-  const [newPhotos, setNewPhotos] = useState<string>("https://images.unsplash.com/photo-1555854877-bab0e564b8d5");
+  const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
+  const [newPhotoPreviews, setNewPhotoPreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingVideoId, setUploadingVideoId] = useState<string | null>(null);
+  const [uploadingPhotosId, setUploadingPhotosId] = useState<string | null>(null);
 
   const isManager = currentResidency?.role === "owner" || currentResidency?.role === "manager";
 
@@ -109,12 +112,15 @@ export default function ManageMarketplacePage() {
 
     setIsSubmitting(true);
     try {
-      const photoArray = newPhotos
-        .split("\n")
-        .map((p) => p.trim())
-        .filter((p) => p.length > 0);
+      // Upload photos directly first (#24) — the backend stores them and
+      // returns URLs which are attached to the new listing.
+      let photoUrls: string[] = [];
+      if (newPhotoFiles.length > 0) {
+        const upRes = await api.uploadListingPhotos(currentMessId, newPhotoFiles);
+        photoUrls = upRes.photo_urls || [];
+      }
 
-      await api.createListing(currentMessId, {
+      const created = await api.createListing(currentMessId, {
         title: newTitle,
         description: newDesc,
         rent_amount: Number(newRent),
@@ -123,11 +129,17 @@ export default function ManageMarketplacePage() {
         bed_id: newBedId || null,
         room_type: newRoomType,
         gender_policy: newGender,
-        video_url: newVideoUrl || null,
+        video_url: null,
         area_name: newArea || null,
         amenities: newAmenities,
-        photos: photoArray,
+        photos: photoUrls,
       });
+
+      // Walk-through video is uploaded as a file after creation (#25)
+      const listingId = created?.listing?.id;
+      if (newVideoFile && listingId) {
+        await api.uploadListingVideo(currentMessId, listingId, newVideoFile);
+      }
 
       setShowCreateModal(false);
       resetCreateForm();
@@ -139,14 +151,42 @@ export default function ManageMarketplacePage() {
     }
   };
 
+  const handleNewPhotosPicked = (files: FileList | null) => {
+    if (!files?.length) return;
+    const picked = Array.from(files).slice(0, 10);
+    setNewPhotoFiles((prev) => [...prev, ...picked].slice(0, 10));
+    setNewPhotoPreviews((prev) => [...prev, ...picked.map((f) => URL.createObjectURL(f))].slice(0, 10));
+  };
+
+  const removeNewPhoto = (idx: number) => {
+    setNewPhotoFiles((prev) => prev.filter((_, i) => i !== idx));
+    setNewPhotoPreviews((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleListingPhotosUpload = async (listingId: string, files: FileList | null) => {
+    if (!currentMessId || !files?.length) return;
+    setUploadingPhotosId(listingId);
+    try {
+      await api.uploadListingPhotos(currentMessId, Array.from(files).slice(0, 10), listingId);
+      alert("Photos uploaded successfully!");
+      loadData();
+    } catch (err: any) {
+      alert(err.message || "Failed to upload photos (max 10 MB each, JPG/PNG/WebP)");
+    } finally {
+      setUploadingPhotosId(null);
+    }
+  };
+
   const resetCreateForm = () => {
     setNewTitle("");
     setNewDesc("");
     setNewRent("");
     setNewDeposit("");
     setNewBedId("");
-    setNewVideoUrl("");
+    setNewVideoFile(null);
     setNewArea("");
+    setNewPhotoFiles([]);
+    setNewPhotoPreviews([]);
   };
 
   const handleToggleListingActive = async (listingId: string, currentStatus: boolean) => {
@@ -390,6 +430,26 @@ export default function ManageMarketplacePage() {
                       )}
                       {item.video_url && uploadingVideoId !== item.id && (
                         <span className="text-emerald-600">✓ Video ready</span>
+                      )}
+                      <label className="cursor-pointer flex items-center gap-1 text-emerald-700 hover:text-emerald-600 font-semibold">
+                        <ImageIcon className="h-3.5 w-3.5" />
+                        Add Photos
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => {
+                            handleListingPhotosUpload(item.id, e.target.files);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                      {uploadingPhotosId === item.id && (
+                        <span className="text-emerald-600 animate-pulse">Uploading…</span>
+                      )}
+                      {item.photos?.length > 0 && uploadingPhotosId !== item.id && (
+                        <span className="text-gray-400">{item.photos.length} photos</span>
                       )}
                     </div>
 
@@ -840,27 +900,49 @@ export default function ManageMarketplacePage() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
-                  Walkthrough Video URL (#25)
+                  Walkthrough Video (Direct Upload) (#25)
                 </label>
                 <input
-                  type="url"
-                  placeholder="https://youtu.be/... (YouTube, Vimeo or Stream)"
-                  value={newVideoUrl}
-                  onChange={(e) => setNewVideoUrl(e.target.value)}
-                  className="w-full border rounded-lg p-2.5 text-sm"
+                  type="file"
+                  accept="video/mp4,video/quicktime,video/webm"
+                  onChange={(e) => setNewVideoFile(e.target.files?.[0] || null)}
+                  className="w-full border rounded-lg p-2 text-sm file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-emerald-600 file:text-white file:text-xs file:font-semibold"
                 />
+                <p className="text-[11px] text-gray-400 mt-1">MP4/MOV/WebM, max 50 MB — uploaded after publish.</p>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
-                  Photo URLs (One per line) (#24)
+                  Photos (Direct Upload) (#24)
                 </label>
-                <textarea
-                  rows={2}
-                  value={newPhotos}
-                  onChange={(e) => setNewPhotos(e.target.value)}
-                  className="w-full border rounded-lg p-2.5 text-xs font-mono"
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  onChange={(e) => {
+                    handleNewPhotosPicked(e.target.files);
+                    e.target.value = "";
+                  }}
+                  className="w-full border rounded-lg p-2 text-sm file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-emerald-600 file:text-white file:text-xs file:font-semibold"
                 />
+                {newPhotoPreviews.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {newPhotoPreviews.map((src, idx) => (
+                      <div key={idx} className="relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={src} alt={`Photo ${idx + 1}`} className="h-16 w-16 rounded-md object-cover border" />
+                        <button
+                          type="button"
+                          onClick={() => removeNewPhoto(idx)}
+                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center shadow"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[11px] text-gray-400 mt-1">Up to 10 photos, 10 MB each — JPG/PNG/WebP.</p>
               </div>
 
               <div>

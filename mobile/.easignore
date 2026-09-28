@@ -3,3 +3,13 @@ node_modules/
 dist/
 .claude/
 *.log
+
+# Only the mobile app is needed for EAS builds — the Laravel/Next.js parts
+# never enter the bundle and backend symlinks break Windows archiving.
+/backend
+/web
+/.github
+/.freebuff
+/docker-compose.yml
+/mess-platform-agent-guide.md
+/README.md

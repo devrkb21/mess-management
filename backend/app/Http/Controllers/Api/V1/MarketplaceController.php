@@ -288,6 +288,64 @@ class MarketplaceController extends Controller
     }
 
     /**
+     * POST /api/v1/messes/{mess}/listings/photos — Direct photo upload (#24)
+     * Stores each image on the media disk. When listing_id is given the photos
+     * are appended to that listing; otherwise the URLs are returned so the
+     * client can attach them while creating a listing.
+     */
+    public function uploadPhotos(Request $request, string $mess): JsonResponse
+    {
+        $messModel = Mess::findOrFail($mess);
+
+        $user = $request->user();
+        $isAuthorized = $user->is_superadmin ||
+            Residency::where('user_id', $user->id)
+                ->where('mess_id', $messModel->id)
+                ->whereIn('role', ['owner', 'manager'])
+                ->where('status', 'active')
+                ->exists();
+
+        if (! $isAuthorized) {
+            return response()->json(['message' => 'Unauthorized to upload photos for this mess.'], 403);
+        }
+
+        $validated = $request->validate([
+            'photos' => ['required', 'array', 'min:1', 'max:10'],
+            'photos.*' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+            'listing_id' => ['sometimes', 'nullable', 'uuid', 'exists:listings,id'],
+        ]);
+
+        $media = app(MediaStorageService::class);
+
+        $urls = [];
+        foreach ($request->file('photos') as $photo) {
+            $urls[] = $media->storeUpload($photo, 'listing-photos');
+        }
+
+        $listing = null;
+
+        if (! empty($validated['listing_id'])) {
+            $listing = Listing::where('mess_id', $messModel->id)->findOrFail($validated['listing_id']);
+
+            $maxSort = (int) $listing->photos()->max('sort_order');
+
+            foreach ($urls as $idx => $url) {
+                ListingPhoto::create([
+                    'listing_id' => $listing->id,
+                    'photo_url' => $url,
+                    'sort_order' => $maxSort + 1 + $idx,
+                ]);
+            }
+        }
+
+        return response()->json([
+            'message' => 'Photos uploaded successfully.',
+            'photo_urls' => $urls,
+            'listing' => $listing?->fresh(['photos']),
+        ], 201);
+    }
+
+    /**
      * PATCH /api/v1/marketplace/listings/{id}
      */
     public function update(Request $request, string $id): JsonResponse

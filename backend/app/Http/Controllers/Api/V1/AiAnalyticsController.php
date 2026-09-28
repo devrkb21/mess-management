@@ -118,4 +118,22 @@ class AiAnalyticsController extends Controller
             ...$analytics,
         ]);
     }
+
+    /**
+     * Marketplace Performance Analytics (#46) — views, application rate,
+     * time-to-fill and pricing position per listing.
+     */
+    public function vacancyAnalytics(string $messId): JsonResponse
+    {
+        $mess = Mess::findOrFail($messId);
+        $analytics = $this->analyticsService->getVacancyAnalytics($mess);
+
+        return response()->json([
+            'mess' => [
+                'id' => $mess->id,
+                'name' => $mess->name,
+            ],
+            ...$analytics,
+        ]);
+    }
 }

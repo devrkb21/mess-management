@@ -155,6 +155,24 @@ export const api = {
   },
   getListing: (id: string) => apiRequest(`/marketplace/listings/${id}`),
   getListingShareQr: (id: string) => apiRequest(`/marketplace/listings/${id}/share-qr`),
+  getMapListings: (params: Record<string, any> = {}) => {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== "") query.append(key, String(val));
+    });
+    return apiRequest(`/marketplace/map?${query.toString()}`);
+  },
+  uploadListingVideo: (messId: string, listingId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("listing_id", listingId);
+    formData.append("video", file);
+    return apiRequest(`/messes/${messId}/listings/video`, {
+      method: "POST",
+      body: formData,
+      headers: { "Content-Type": undefined } as any,
+    });
+  },
+  getVacancyAnalytics: (messId: string) => apiRequest(`/messes/${messId}/analytics/vacancy`),
   toggleFavoriteListing: (id: string) => apiRequest(`/marketplace/listings/${id}/favorite`, { method: "POST" }),
   getFavoriteListings: () => apiRequest("/marketplace/favorites"),
   createListing: (messId: string, data: any) => apiRequest(`/messes/${messId}/listings`, { method: "POST", body: JSON.stringify(data) }),

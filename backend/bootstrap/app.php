@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\CheckMessRole;
+use App\Http\Middleware\CheckSuperadmin;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -15,9 +17,19 @@ $app = Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'mess.role' => \App\Http\Middleware\CheckMessRole::class,
-            'superadmin' => \App\Http\Middleware\CheckSuperadmin::class,
+            'mess.role' => CheckMessRole::class,
+            'superadmin' => CheckSuperadmin::class,
         ]);
+
+        // API clients must receive a 401 JSON response, not a redirect to a
+        // named web 'login' route (which does not exist in this API-only app).
+        $middleware->redirectGuestsTo(function (Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return null;
+            }
+
+            return route('login');
+        });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

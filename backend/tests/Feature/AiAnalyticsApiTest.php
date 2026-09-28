@@ -18,9 +18,13 @@ class AiAnalyticsApiTest extends TestCase
     use RefreshDatabase;
 
     protected User $owner;
+
     protected User $resident;
+
     protected Mess $mess;
+
     protected Residency $ownerResidency;
+
     protected Residency $residency;
 
     protected function setUp(): void
@@ -172,7 +176,7 @@ class AiAnalyticsApiTest extends TestCase
 
     public function test_occupancy_analytics_dashboard(): void
     {
-        $floor = Floor::create(['mess_id' => $this->mess->id, 'floor_number' => 1, 'name' => '1st Floor']);
+        $floor = Floor::create(['mess_id' => $this->mess->id, 'name' => '1st Floor', 'sort_order' => 1]);
         $room = Room::create(['floor_id' => $floor->id, 'name' => 'Room 101', 'capacity' => 2]);
         Bed::create(['room_id' => $room->id, 'label' => 'Bed 101-A', 'status' => 'occupied']);
         Bed::create(['room_id' => $room->id, 'label' => 'Bed 101-B', 'status' => 'empty']);
@@ -184,7 +188,7 @@ class AiAnalyticsApiTest extends TestCase
             ->assertJsonPath('occupied_beds', 1)
             ->assertJsonPath('empty_beds', 1);
 
-        $this->assertEquals(50.0, (float)$response->json('occupancy_rate_percentage'));
-        $this->assertEquals(50.0, (float)$response->json('vacancy_rate_percentage'));
+        $this->assertEquals(50.0, (float) $response->json('occupancy_rate_percentage'));
+        $this->assertEquals(50.0, (float) $response->json('vacancy_rate_percentage'));
     }
 }

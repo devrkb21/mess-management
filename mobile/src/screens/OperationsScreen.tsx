@@ -63,8 +63,6 @@ export function OperationsScreen() {
   const [complaintModal, setComplaintModal] = useState(false);
   const [complaintTitle, setComplaintTitle] = useState("");
   const [complaintDesc, setComplaintDesc] = useState("");
-  const [complaintCategory, setComplaintCategory] = useState("maintenance");
-  const [complaintAnon, setComplaintAnon] = useState(false);
 
   // Leave Clearance
   const [plannedLeaveDate, setPlannedLeaveDate] = useState("");
@@ -248,7 +246,7 @@ export function OperationsScreen() {
       await api.postNotice(currentMessId, {
         title: noticeTitle,
         body: noticeBody,
-        is_pinned: noticePinned,
+        pinned: noticePinned,
       });
       Alert.alert("Posted", "Notice published to mess board!");
       setNoticeModal(false);
@@ -268,10 +266,8 @@ export function OperationsScreen() {
     }
     try {
       await api.fileComplaint(currentResidency.id, {
-        title: complaintTitle,
+        subject: complaintTitle,
         description: complaintDesc,
-        category: complaintCategory,
-        is_anonymous: complaintAnon,
       });
       Alert.alert("Submitted", "Complaint logged for manager review.");
       setComplaintModal(false);
@@ -659,9 +655,9 @@ export function OperationsScreen() {
 
               <View style={styles.cardList}>
                 {notices.map((n) => (
-                  <View key={n.id} style={[styles.itemCard, n.is_pinned && styles.pinnedItemCard]}>
+                  <View key={n.id} style={[styles.itemCard, n.pinned && styles.pinnedItemCard]}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                      {n.is_pinned && (
+                      {n.pinned && (
                         <View style={styles.pinnedChip}>
                           <Ionicons name="pin" size={10} color="#b45309" />
                           <Text style={styles.pinnedChipText}>PINNED</Text>
@@ -708,7 +704,7 @@ export function OperationsScreen() {
                   complaints.map((c) => (
                     <View key={c.id} style={styles.itemCard}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                        <Text style={styles.itemTitle}>{c.title}</Text>
+                        <Text style={styles.itemTitle}>{c.subject}</Text>
                         <View
                           style={[
                             styles.statusPill,
@@ -998,11 +994,6 @@ export function OperationsScreen() {
               onChangeText={setComplaintDesc}
               multiline
             />
-
-            <View style={styles.switchRow}>
-              <Text style={styles.inputLabel}>Anonymous Submission</Text>
-              <Switch value={complaintAnon} onValueChange={setComplaintAnon} />
-            </View>
 
             <TouchableOpacity style={styles.modalSubmitButton} onPress={handleFileComplaint}>
               <Text style={styles.modalSubmitText}>Submit Complaint</Text>

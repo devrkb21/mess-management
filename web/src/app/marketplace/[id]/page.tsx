@@ -390,16 +390,26 @@ export default function ListingDetailPage() {
                 </button>
               </div>
 
-              {/* Video Walkthrough Preview (#25) */}
+              {/* Video Walkthrough (#25) — inline player with external fallback */}
               {listing.video_url && (
-                <a
-                  href={listing.video_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 font-semibold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1.5"
-                >
-                  <Video className="h-4 w-4 text-indigo-600" /> Watch Walkthrough Video (#25)
-                </a>
+                <div className="space-y-2">
+                  <video
+                    src={listing.video_url}
+                    controls
+                    preload="metadata"
+                    className="w-full rounded-xl border border-indigo-100 bg-black"
+                  >
+                    Your browser does not support embedded video playback.
+                  </video>
+                  <a
+                    href={listing.video_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-center text-2xs text-indigo-600 hover:text-indigo-800 underline"
+                  >
+                    Open walkthrough video in new tab
+                  </a>
+                </div>
               )}
 
               <div className="pt-4 border-t border-gray-100 space-y-2 text-xs text-gray-600">

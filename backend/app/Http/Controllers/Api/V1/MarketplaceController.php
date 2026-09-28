@@ -8,8 +8,10 @@ use App\Models\ListingFavorite;
 use App\Models\ListingPhoto;
 use App\Models\Mess;
 use App\Models\Residency;
+use App\Services\MediaStorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class MarketplaceController extends Controller
 {
@@ -28,19 +30,19 @@ class MarketplaceController extends Controller
             ])
             ->where('is_active', true);
 
-        $like = \Illuminate\Support\Facades\DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+        $like = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
 
         // Search text
         if ($search = $request->query('query')) {
             $query->where(function ($q) use ($search, $like) {
                 $q->where('title', $like, "%{$search}%")
-                  ->orWhere('description', $like, "%{$search}%")
-                  ->orWhere('area_name', $like, "%{$search}%")
-                  ->orWhereHas('mess', function ($mq) use ($search, $like) {
-                      $mq->where('city', $like, "%{$search}%")
-                         ->orWhere('address', $like, "%{$search}%")
-                         ->orWhere('name', $like, "%{$search}%");
-                  });
+                    ->orWhere('description', $like, "%{$search}%")
+                    ->orWhere('area_name', $like, "%{$search}%")
+                    ->orWhereHas('mess', function ($mq) use ($search, $like) {
+                        $mq->where('city', $like, "%{$search}%")
+                            ->orWhere('address', $like, "%{$search}%")
+                            ->orWhere('name', $like, "%{$search}%");
+                    });
             });
         }
 
@@ -103,6 +105,7 @@ class MarketplaceController extends Controller
 
             $listings->getCollection()->transform(function ($item) use ($favoritedIds) {
                 $item->is_favorited = isset($favoritedIds[$item->id]);
+
                 return $item;
             });
         }
@@ -156,7 +159,7 @@ class MarketplaceController extends Controller
     {
         $listing = Listing::with('mess:id,name,address,city')->findOrFail($id);
 
-        $webBaseUrl = env('FRONTEND_URL', 'http://' . $request->getHost() . ':3000');
+        $webBaseUrl = env('FRONTEND_URL', 'http://'.$request->getHost().':3000');
         $shareUrl = "{$webBaseUrl}/marketplace/{$listing->id}";
 
         return response()->json([
@@ -182,6 +185,7 @@ class MarketplaceController extends Controller
 
         if ($existing) {
             $existing->delete();
+
             return response()->json([
                 'message' => 'Listing removed from favorites.',
                 'is_favorited' => false,
@@ -267,7 +271,7 @@ class MarketplaceController extends Controller
         ]);
 
         // Add photos if provided
-        if (!empty($validated['photos'])) {
+        if (! empty($validated['photos'])) {
             foreach ($validated['photos'] as $idx => $photoUrl) {
                 ListingPhoto::create([
                     'listing_id' => $listing->id,
@@ -298,7 +302,7 @@ class MarketplaceController extends Controller
                 ->where('status', 'active')
                 ->exists();
 
-        if (!$isAuthorized) {
+        if (! $isAuthorized) {
             return response()->json(['message' => 'Unauthorized to modify this listing.'], 403);
         }
 
@@ -313,6 +317,8 @@ class MarketplaceController extends Controller
             'amenities' => ['sometimes', 'nullable', 'array'],
             'rules' => ['sometimes', 'nullable', 'array'],
             'video_url' => ['sometimes', 'nullable', 'url', 'max:500'],
+            'latitude' => ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
             'area_name' => ['sometimes', 'nullable', 'string', 'max:100'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
@@ -340,7 +346,7 @@ class MarketplaceController extends Controller
                 ->where('status', 'active')
                 ->exists();
 
-        if (!$isAuthorized) {
+        if (! $isAuthorized) {
             return response()->json(['message' => 'Unauthorized to delete this listing.'], 403);
         }
 
@@ -363,5 +369,121 @@ class MarketplaceController extends Controller
             ->get();
 
         return response()->json($listings);
+    }
+
+    /**
+     * GET /api/v1/marketplace/map — Map view pins for geolocated listings (#26 Map View)
+     * Accepts the same smart filters as index() plus a bounding box:
+     * south, west, north, east (decimal degrees).
+     */
+    public function map(Request $request): JsonResponse
+    {
+        $query = Listing::query()
+            ->with(['mess:id,name,address,city,gender_policy', 'photos'])
+            ->where('is_active', true)
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude');
+
+        if ($search = $request->query('query')) {
+            $like = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $query->where(function ($q) use ($search, $like) {
+                $q->where('title', $like, "%{$search}%")
+                    ->orWhere('area_name', $like, "%{$search}%")
+                    ->orWhereHas('mess', fn ($mq) => $mq->where('city', $like, "%{$search}%"));
+            });
+        }
+
+        if ($city = $request->query('city')) {
+            $query->whereHas('mess', fn ($q) => $q->where('city', $like, "%{$city}%"));
+        }
+
+        if ($minRent = $request->query('min_rent')) {
+            $query->where('rent_amount', '>=', (float) $minRent);
+        }
+        if ($maxRent = $request->query('max_rent')) {
+            $query->where('rent_amount', '<=', (float) $maxRent);
+        }
+
+        if ($gender = $request->query('gender_policy')) {
+            $query->where('gender_policy', $gender);
+        }
+
+        // Bounding box filter for the visible map viewport
+        $south = $request->query('south');
+        $west = $request->query('west');
+        $north = $request->query('north');
+        $east = $request->query('east');
+
+        if ($south !== null && $west !== null && $north !== null && $east !== null) {
+            $query->whereBetween('latitude', [min((float) $south, (float) $north), max((float) $south, (float) $north)])
+                ->whereBetween('longitude', [min((float) $west, (float) $east), max((float) $west, (float) $east)]);
+        }
+
+        $pins = $query->get()->map(fn (Listing $listing) => [
+            'id' => $listing->id,
+            'title' => $listing->title,
+            'rent_amount' => (float) $listing->rent_amount,
+            'gender_policy' => $listing->gender_policy,
+            'room_type' => $listing->room_type,
+            'latitude' => (float) $listing->latitude,
+            'longitude' => (float) $listing->longitude,
+            'area_name' => $listing->area_name,
+            'city' => $listing->mess->city ?? null,
+            'mess_name' => $listing->mess->name ?? null,
+            'photo_url' => $listing->photos->first()->photo_url ?? null,
+            'available_from' => $listing->available_from?->toDateString(),
+        ]);
+
+        return response()->json([
+            'pins' => $pins,
+            'count' => $pins->count(),
+        ]);
+    }
+
+    /**
+     * POST /api/v1/messes/{mess}/listings/video — Upload a short walk-through video (#24)
+     * Stores the file on the public disk and attaches its URL to the listing.
+     */
+    public function uploadVideo(Request $request, string $mess): JsonResponse
+    {
+        $messModel = Mess::findOrFail($mess);
+
+        $user = $request->user();
+        $isAuthorized = $user->is_superadmin ||
+            Residency::where('user_id', $user->id)
+                ->where('mess_id', $messModel->id)
+                ->whereIn('role', ['owner', 'manager'])
+                ->where('status', 'active')
+                ->exists();
+
+        if (! $isAuthorized) {
+            return response()->json(['message' => 'Unauthorized to upload videos for this mess.'], 403);
+        }
+
+        $validated = $request->validate([
+            'video' => [
+                'required',
+                'file',
+                'max:51200', // 50 MB
+                'mimetypes:video/mp4,video/quicktime,video/webm',
+            ],
+            'listing_id' => ['required', 'uuid', 'exists:listings,id'],
+        ]);
+
+        $listing = Listing::where('mess_id', $messModel->id)->findOrFail($validated['listing_id']);
+
+        if ($request->hasFile('video')) {
+            // Delete the previous video if we own its URL, then store the new one
+            // on the active media disk (R2 in production, local public in dev).
+            $media = app(MediaStorageService::class);
+            $media->deleteByUrl($listing->video_url);
+            $videoUrl = $media->storeUpload($request->file('video'), 'listing-videos');
+            $listing->update(['video_url' => $videoUrl]);
+        }
+
+        return response()->json([
+            'message' => 'Walk-through video uploaded successfully.',
+            'video_url' => $listing->fresh()->video_url,
+        ]);
     }
 }

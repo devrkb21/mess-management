@@ -544,8 +544,47 @@ Base path: `/api/v1`. Auth via Laravel Sanctum bearer token. All responses JSON.
 
 ## PART 8 — What Happens After v1.0
 
-Once the 22 features above are stable and in real use by at least one mess, the following are the next planned phases (not to be built now, but the schema above should not actively block them):
+Once the 22 v1.0 features are stable and in real use by at least one mess, the following phases are planned. **Do not build these now** — but the v1.0 database schema and API design should not actively block them later (e.g., `beds`, `residencies`, and `messes` tables are already shaped so a future marketplace can read from them without restructuring).
 
-- **v1.5:** Public vacancy marketplace, smart search/filters, map view, in-app chat.
-- **v2.0:** Online payment gateway (bKash/Nagad), AI receipt scanner, digital agreements, visitor/parcel QR pass.
-- **v2.5:** Trust score & reviews, lifestyle compatibility matching, AI notice writer, budget prediction, analytics dashboards.
+### v1.5 — Vacancy Marketplace
+
+This phase turns the platform from a closed mess-management tool into a public two-sided marketplace, directly extending the existing mess dashboard rather than being a separate product.
+
+- **Vacancy Posting** — When a bed becomes empty, the Manager publishes a listing straight from the same dashboard used to manage residents: photos of the room, a written rules checklist (smoking policy, curfew, gender policy — already partially captured by `messes.gender_policy`), and the monthly cost estimate derived from the mess's actual recent meal-rate + fixed-bill history (not a manual guess).
+- **Short Walk-through Video** — A single short video attached to the listing, uploaded to object storage the same way room photos are, giving seekers a realistic feel for the space before applying.
+- **Smart Filters** — Seekers filter public listings by area/university proximity, monthly budget range, and gender policy. This needs an indexed, searchable read model of listings (Meilisearch, as already chosen in the tech stack) rather than filtering the live operational tables directly.
+- **Map View** — Listings plotted geographically (lat/long stored per mess) so seekers can visually browse by neighborhood or distance from a specific university/office.
+- **Save / Favorite Listing** — Seekers bookmark listings they're interested in, tied to their global user account, so they can compare a shortlist before applying.
+- **Auto Hide** — The moment a listing's target bed is filled (via the existing `beds.status` flip that already happens in v1.0's invite-accept flow), the public listing is automatically removed from marketplace search results without any manual step from the Manager. It automatically reappears if that bed opens up again later.
+
+### v1.5 — Join & Booking Flow
+
+This extends v1.0's invite-only onboarding (Part 4, Flow 2) into a full public application flow, while keeping the invite-link path also available for private, non-marketplace onboarding.
+
+- **Apply to Join** — From a marketplace listing, a seeker submits a one-click application instead of waiting for a private invite link. This creates the same kind of pending record v1.0's invite system already produces, just originating from a public listing instead of a Manager-issued code.
+- **QR / Invite Link Join** — Carried over unchanged from v1.0; remains the private, non-marketplace path for onboarding someone a Manager already knows personally.
+- **In-App Chat with Manager** — Before accepting, a seeker can message the Manager directly inside the app to ask questions (house rules, move-in date, deposit) without exchanging phone numbers up front.
+- **Visit Scheduling** — Once a conversation starts, either side can propose a specific date/time for the seeker to physically visit the mess before committing, tracked as a simple scheduled event tied to the application.
+- **Accept / Reject Request** — The Manager's decision point, functionally identical to the invite-approval step already built in v1.0 — just with a public applicant instead of a pre-vetted invitee.
+- **Auto Bed Assignment** — On acceptance, the system assigns the specific bed and converts the applicant into an active `residency`, reusing the exact same conversion logic v1.0 already implements for invite acceptance.
+- **Waiting List** — If more applicants apply than there are open beds, additional qualified applicants are queued in order of application time and automatically notified if an earlier applicant is rejected or another bed opens up.
+
+### v2.0 — Payments, Automation, and On-Site Security
+
+- **Online Payment Gateway (bKash/Nagad)** — Replaces v1.0's manual "mark as paid" flow (Part 3, `payments` table) with an actual transaction: the resident pays inside the app, the gateway confirms, and the `payments` record is created automatically instead of by the Manager typing it in. The `monthly_bills.status` transitions (draft → issued → paid) stay the same; only how a `payments` row gets created changes.
+- **AI Receipt Scanner** — Instead of the Manager manually typing the amount and description for each market/bazar expense (v1.0's `expense_entries` table), they photograph the handwritten cash memo and an AI model extracts the item list and total automatically, pre-filling the entry for the Manager to confirm before saving.
+- **Digital Agreement / Contract** — At onboarding, instead of (or alongside) the paper rules checklist, a formal digital tenancy agreement is generated referencing the mess's rules and the resident's agreed terms, which both sides digitally acknowledge and which is stored as a permanent record on the `residency`.
+- **Visitor & Parcel Pass** — A resident expecting a guest or a delivery generates a one-time QR code from the app ahead of time. When the visitor or delivery person arrives and that code is shown/scanned, the resident gets an instant push notification confirming who's at the door, without needing a shared building intercom or physical logbook.
+
+### v2.5 — Trust, Community, and Analytics
+
+- **Two-Way Rating** — At the exact moment a resident completes leave clearance (v1.0's `leave_clearances` flow), both the Manager and the departing resident are prompted to rate each other. This closes the loop on the resident lifecycle that v1.0 already tracks end-to-end.
+- **Trust Score** — An aggregated score computed from a user's accumulated ratings across all their past residencies, shown on their public profile — giving Managers reviewing a new applicant (or seekers evaluating a mess) a quick trust signal beyond just what's written in the application.
+- **Lifestyle Matching / Compatibility Score** — Seekers fill out a one-time lifestyle profile (smoking habits, sleep schedule, study/work environment preferences) on their global account. When browsing marketplace listings, the system shows a compatibility percentage against the existing residents of that mess, calculated by comparing overlapping preference fields.
+- **AI Notice Writer** — When a Manager wants to post something to the Notice Board (v1.0 feature #16) but only has rough bullet points, an AI assistant drafts a clear, properly worded notice for them to review and publish.
+- **Budget Prediction** — Using the mess's historical `expense_entries` and `monthly_bills` data accumulated since v1.0 launch, the system forecasts next month's likely per-meal rate and total bill for residents, so people can plan ahead rather than being surprised at month-end.
+- **Vacancy Analytics** — For Managers, a dashboard showing how their listings are performing in the marketplace: views, application rate, average time-to-fill for a bed, and how their pricing compares to similar messes in the same area.
+
+### Build-Order Note for the Agent
+
+These phases are listed in their intended build order (v1.5 → v2.0 → v2.5) because of real dependencies — for example, Two-Way Rating cannot exist before the leave-clearance flow it triggers from, and Vacancy Analytics cannot exist before the Marketplace itself generates data to analyze. When the time comes to scope any of these phases in detail (schema additions, new endpoints), treat this section as the product-logic reference, the same way Part 1 was used for v1.0.

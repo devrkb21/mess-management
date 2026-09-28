@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  TrendingUp,
   Video,
   ArrowRight,
   Filter,
@@ -29,7 +30,7 @@ import {
 export default function ManageMarketplacePage() {
   const { currentMessId, currentResidency } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<"listings" | "applications" | "visits" | "waitlist">("listings");
+  const [activeTab, setActiveTab] = useState<"listings" | "applications" | "visits" | "waitlist" | "analytics">("listings");
   const [loading, setLoading] = useState(true);
 
   // Mess Listings State
@@ -51,6 +52,9 @@ export default function ManageMarketplacePage() {
   // Waitlist State
   const [waitlist, setWaitlist] = useState<any[]>([]);
 
+  // Vacancy Analytics State (#46)
+  const [vacancyStats, setVacancyStats] = useState<any>(null);
+
   // New Listing Form
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
@@ -65,6 +69,7 @@ export default function ManageMarketplacePage() {
   const [newAmenities, setNewAmenities] = useState<string[]>(["wifi"]);
   const [newPhotos, setNewPhotos] = useState<string>("https://images.unsplash.com/photo-1555854877-bab0e564b8d5");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadingVideoId, setUploadingVideoId] = useState<string | null>(null);
 
   const isManager = currentResidency?.role === "owner" || currentResidency?.role === "manager";
 
@@ -72,12 +77,13 @@ export default function ManageMarketplacePage() {
     if (!currentMessId) return;
     setLoading(true);
     try {
-      const [listRes, appRes, visitRes, waitRes, bedRes] = await Promise.all([
+      const [listRes, appRes, visitRes, waitRes, bedRes, vacancyRes] = await Promise.all([
         api.getMessListings(currentMessId),
         api.getMessApplications(currentMessId),
         api.getMessVisits(currentMessId),
         api.getMessWaitingList(currentMessId),
         api.getBeds(currentMessId),
+        api.getVacancyAnalytics(currentMessId).catch(() => null),
       ]);
 
       setListings(listRes || []);
@@ -85,6 +91,7 @@ export default function ManageMarketplacePage() {
       setVisits(visitRes.data || []);
       setWaitlist(waitRes || []);
       setBeds(bedRes.beds || []);
+      if (vacancyRes) setVacancyStats(vacancyRes);
     } catch (err) {
       console.error("Failed to load manager marketplace data", err);
     } finally {
@@ -158,6 +165,20 @@ export default function ManageMarketplacePage() {
       loadData();
     } catch (err: any) {
       alert(err.message || "Failed to delete listing");
+    }
+  };
+
+  const handleVideoUpload = async (listingId: string, file: File) => {
+    if (!currentMessId) return;
+    setUploadingVideoId(listingId);
+    try {
+      await api.uploadListingVideo(currentMessId, listingId, file);
+      alert("Walk-through video uploaded successfully!");
+      loadData();
+    } catch (err: any) {
+      alert(err.message || "Failed to upload video (max 50 MB, MP4/MOV/WebM)");
+    } finally {
+      setUploadingVideoId(null);
     }
   };
 
@@ -271,6 +292,17 @@ export default function ManageMarketplacePage() {
         >
           <Clock className="h-4 w-4" /> Waiting List ({waitlist.length})
         </button>
+
+        <button
+          onClick={() => setActiveTab("analytics")}
+          className={`pb-3 border-b-2 transition flex items-center gap-2 ${
+            activeTab === "analytics"
+              ? "border-emerald-600 text-emerald-700 font-bold"
+              : "border-transparent text-gray-500 hover:text-gray-800"
+          }`}
+        >
+          <TrendingUp className="h-4 w-4" /> Vacancy Analytics
+        </button>
       </div>
 
       {/* ── Tab 1: Listings ── */}
@@ -339,6 +371,26 @@ export default function ManageMarketplacePage() {
                     <div className="flex items-center gap-3 text-gray-500">
                       <span>Applications: <strong>{item.applications_count || 0}</strong></span>
                       <span>Visits: <strong>{item.visits_count || 0}</strong></span>
+                      <label className="cursor-pointer flex items-center gap-1 text-emerald-700 hover:text-emerald-600 font-semibold">
+                        <Video className="h-3.5 w-3.5" />
+                        {item.video_url ? "Replace Video" : "Add Video"}
+                        <input
+                          type="file"
+                          accept="video/mp4,video/quicktime,video/webm"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleVideoUpload(item.id, file);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                      {uploadingVideoId === item.id && (
+                        <span className="text-emerald-600 animate-pulse">Uploading…</span>
+                      )}
+                      {item.video_url && uploadingVideoId !== item.id && (
+                        <span className="text-emerald-600">✓ Video ready</span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -562,6 +614,107 @@ export default function ManageMarketplacePage() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Tab 5: Vacancy Analytics (#46) ── */}
+      {activeTab === "analytics" && vacancyStats && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { label: "Total Views", value: vacancyStats.summary?.total_views ?? 0, icon: <Eye className="h-4 w-4" /> },
+              { label: "Applications", value: vacancyStats.summary?.total_applications ?? 0, icon: <Users className="h-4 w-4" /> },
+              {
+                label: "Application Rate",
+                value: `${vacancyStats.summary?.application_rate_percentage ?? 0}%`,
+                icon: <TrendingUp className="h-4 w-4" />,
+              },
+              {
+                label: "Avg. Time to Fill",
+                value:
+                  vacancyStats.summary?.average_time_to_fill_days != null
+                    ? `${vacancyStats.summary.average_time_to_fill_days} days`
+                    : "—",
+                icon: <Clock className="h-4 w-4" />,
+              },
+            ].map((stat) => (
+              <div key={stat.label} className="bg-white rounded-xl border border-gray-200 p-4">
+                <div className="flex items-center gap-2 text-emerald-700 text-xs font-bold uppercase tracking-wide">
+                  {stat.icon} {stat.label}
+                </div>
+                <div className="text-2xl font-black text-gray-900 mt-2">{stat.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="font-bold text-gray-900 text-sm mb-3">Pricing Position — {vacancyStats.summary?.city_name}</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <div>
+                <div className="text-gray-400 uppercase font-semibold">Your Avg. Rent</div>
+                <div className="text-lg font-black text-gray-900">
+                  ৳{Number(vacancyStats.summary?.average_rent || 0).toLocaleString()}
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-400 uppercase font-semibold">City Marketplace Avg.</div>
+                <div className="text-lg font-black text-gray-900">
+                  ৳{Number(vacancyStats.summary?.city_average_rent || 0).toLocaleString()}
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-400 uppercase font-semibold">Position</div>
+                <div
+                  className={`inline-block mt-1 px-2.5 py-1 rounded-full font-bold ${
+                    vacancyStats.summary?.price_position === "above_market"
+                      ? "bg-rose-100 text-rose-700"
+                      : vacancyStats.summary?.price_position === "below_market"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-gray-100 text-gray-700"
+                  }`}
+                >
+                  {vacancyStats.summary?.price_position?.replace("_", " ") || "average"}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200 text-xs">
+              <thead className="bg-gray-50 text-gray-500 font-semibold uppercase">
+                <tr>
+                  <th className="px-4 py-3 text-left">Listing</th>
+                  <th className="px-4 py-3 text-left">Views</th>
+                  <th className="px-4 py-3 text-left">Applications</th>
+                  <th className="px-4 py-3 text-left">Accepted</th>
+                  <th className="px-4 py-3 text-left">Conv. Rate</th>
+                  <th className="px-4 py-3 text-left">Rent</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {(vacancyStats.listings || []).map((l: any) => (
+                  <tr key={l.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-bold text-gray-900">
+                      {l.title}
+                      {!l.is_active && <span className="ml-2 text-2xs text-gray-400">(hidden)</span>}
+                    </td>
+                    <td className="px-4 py-3">{l.views_count}</td>
+                    <td className="px-4 py-3">{l.applications_count}</td>
+                    <td className="px-4 py-3">{l.accepted_count}</td>
+                    <td className="px-4 py-3 font-semibold text-emerald-700">{l.application_rate_percentage}%</td>
+                    <td className="px-4 py-3">৳{Number(l.rent_amount).toLocaleString()}</td>
+                  </tr>
+                ))}
+                {(vacancyStats.listings || []).length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                      No listings yet — post a vacancy to start collecting analytics.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

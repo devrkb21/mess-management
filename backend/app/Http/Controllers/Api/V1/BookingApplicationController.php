@@ -115,7 +115,6 @@ class BookingApplicationController extends Controller
         $applications = BookingApplication::with([
             'listing:id,title,rent_amount,bed_id',
             'user:id,name,email,phone,avatar_url',
-            'user.profile',
             'assignedBed',
         ])
             ->whereHas('listing', fn ($q) => $q->where('mess_id', $messModel->id))
@@ -141,7 +140,7 @@ class BookingApplicationController extends Controller
                 ->where('status', 'active')
                 ->exists();
 
-        if (!$isAuthorized) {
+        if (! $isAuthorized) {
             return response()->json(['message' => 'Unauthorized to decide on this application.'], 403);
         }
 
@@ -176,7 +175,7 @@ class BookingApplicationController extends Controller
             // Accepted flow: Auto Bed Assignment (#34)
             $bedId = $validated['bed_id'] ?? $application->listing->bed_id;
 
-            if (!$bedId) {
+            if (! $bedId) {
                 // Find first vacant bed in mess
                 $vacantBed = Bed::whereHas('room.floor', fn ($q) => $q->where('mess_id', $application->listing->mess_id))
                     ->where('status', 'empty')

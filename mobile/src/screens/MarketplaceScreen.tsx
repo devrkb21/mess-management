@@ -69,6 +69,8 @@ export function MarketplaceScreen() {
   const [pickedPhotos, setPickedPhotos] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [pickedVideo, setPickedVideo] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [submittingCreate, setSubmittingCreate] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStep, setUploadStep] = useState("");
 
   const fetchListings = async () => {
     setLoading(true);
@@ -244,10 +246,15 @@ export function MarketplaceScreen() {
       // Upload photos directly from the device first (#24)
       let photoUrls: string[] = [];
       if (pickedPhotos.length > 0) {
-        const upRes = await api.uploadListingPhotos(messId, pickedPhotos);
+        setUploadStep(`Uploading ${pickedPhotos.length} photo${pickedPhotos.length > 1 ? "s" : ""}...`);
+        setUploadProgress(0);
+        const upRes = await api.uploadListingPhotos(messId, pickedPhotos, undefined, (p: number) =>
+          setUploadProgress(p)
+        );
         photoUrls = upRes?.photo_urls || [];
       }
 
+      setUploadStep("Publishing listing...");
       const created = await api.createListing(messId, {
         title: newTitle.trim(),
         description: newDesc.trim() || null,
@@ -262,7 +269,9 @@ export function MarketplaceScreen() {
       // Walk-through video recorded/selected on the phone (#25)
       const listingId = created?.listing?.id;
       if (pickedVideo && listingId) {
-        await api.uploadListingVideo(messId, listingId, pickedVideo);
+        setUploadStep("Uploading walk-through video...");
+        setUploadProgress(0);
+        await api.uploadListingVideo(messId, listingId, pickedVideo, (p: number) => setUploadProgress(p));
       }
 
       Alert.alert("Published! 🎉", "Your vacancy listing is now live on the marketplace.");
@@ -270,9 +279,11 @@ export function MarketplaceScreen() {
       resetCreateForm();
       fetchListings();
     } catch (err: any) {
-      Alert.alert("Error", err.message || "Failed to publish listing.");
+      Alert.alert("Upload Problem", err.message || "Failed to publish listing. Please try again.");
     } finally {
       setSubmittingCreate(false);
+      setUploadStep("");
+      setUploadProgress(0);
     }
   };
 
@@ -818,9 +829,21 @@ export function MarketplaceScreen() {
               </View>
             </ScrollView>
 
+            {submittingCreate && uploadStep ? (
+              <View style={styles.progressWrap}>
+                <Text style={styles.progressLabel}>{uploadStep}</Text>
+                <View style={styles.progressTrack}>
+                  <View style={[styles.progressFill, { width: `${Math.max(uploadProgress, 4)}%` }]} />
+                </View>
+              </View>
+            ) : null}
+
             <TouchableOpacity style={styles.submitBtn} onPress={handleCreateListing} disabled={submittingCreate}>
               {submittingCreate ? (
-                <ActivityIndicator color="#ffffff" />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <ActivityIndicator color="#ffffff" />
+                  <Text style={styles.submitBtnText}>{uploadStep || "Working..."}</Text>
+                </View>
               ) : (
                 <Text style={styles.submitBtnText}>Publish Listing</Text>
               )}
@@ -1078,5 +1101,9 @@ const styles = StyleSheet.create({
   inputLabel: { fontSize: 11, fontWeight: "700", color: "#4b5563", marginTop: 8, marginBottom: 4 },
   popupInput: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 8, fontSize: 12, color: "#111827" },
   submitBtn: { backgroundColor: "#059669", padding: 12, borderRadius: 10, alignItems: "center", marginTop: 14 },
+  progressWrap: { marginTop: 14 },
+  progressLabel: { fontSize: 11, fontWeight: "600", color: "#065f46", marginBottom: 6 },
+  progressTrack: { height: 6, backgroundColor: "#e5e7eb", borderRadius: 3, overflow: "hidden" },
+  progressFill: { height: "100%", backgroundColor: "#059669", borderRadius: 3 },
   submitBtnText: { color: "#ffffff", fontWeight: "700", fontSize: 13 },
 });

@@ -218,7 +218,12 @@ export const api = {
   createListing: (messId: string, payload: any) =>
     apiRequest(`/messes/${messId}/listings`, { method: "POST", body: JSON.stringify(payload) }),
   getMessListings: (messId: string) => apiRequest(`/messes/${messId}/listings`),
-  uploadListingPhotos: (messId: string, files: any[], listingId?: string) => {
+  uploadListingPhotos: (
+    messId: string,
+    files: any[],
+    listingId?: string,
+    onProgress?: (percent: number) => void
+  ) => {
     const uploadFiles: UploadFile[] = files.map((file: any) => ({
       uri: file.uri,
       name: file.fileName || undefined,
@@ -229,9 +234,15 @@ export const api = {
       fileField: "photos",
       files: uploadFiles,
       fallbackExtension: "jpg",
+      onProgress,
     });
   },
-  uploadListingVideo: (messId: string, listingId: string, file: any) => {
+  uploadListingVideo: (
+    messId: string,
+    listingId: string,
+    file: any,
+    onProgress?: (percent: number) => void
+  ) => {
     const uploadFile: UploadFile = {
       uri: file.uri,
       name: file.fileName || undefined,
@@ -242,6 +253,7 @@ export const api = {
       fileField: "video",
       files: [uploadFile],
       fallbackExtension: "mp4",
+      onProgress,
     });
   },
 

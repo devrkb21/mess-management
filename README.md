@@ -67,7 +67,7 @@ docker compose up -d --build
 
 The web app is available at `http://localhost:8080` and the Laravel API at
 `http://localhost:8001` by default. Set `WEB_PORT` and `BACKEND_PORT` in `.env`
-to choose different host ports. The clients use `https://mess.czbd.dev/api/v1`
+to choose different host ports. The clients use `https://messbari.app/api/v1`
 as their fixed API endpoint. Add `--profile tools`
 to start pgAdmin at `http://127.0.0.1:5050`. PostgreSQL and Redis are private
 Compose services and do not consume host ports.
